@@ -18,29 +18,32 @@
 package io.glutenproject.utils
 
 import io.glutenproject.GlutenConfig
+import io.glutenproject.backendsapi.BackendsApiManager
 
 object SystemParameters {
 
+  lazy val GLUTEN_BACKEND = BackendsApiManager.initialize()
+
   val CLICKHOUSE_LIB_PATH_KEY = "clickhouse.lib.path"
-  val CLICKHOUSE_LIB_PATH_DEFAULT_VALUE = ""
+  val CLICKHOUSE_LIB_PATH_DEFAULT_VALUE = "/usr/local/clickhouse/lib/libch.so"
 
   val TPCDS_DATA_PATH_KEY = "tpcds.data.path"
   val TPCDS_DATA_PATH_DEFAULT_VALUE = "/data/tpcds-data-sf1"
 
-  def getClickHouseLibPath(): String = {
+  def getClickHouseLibPath: String = {
     System.getProperty(
       SystemParameters.CLICKHOUSE_LIB_PATH_KEY,
       SystemParameters.CLICKHOUSE_LIB_PATH_DEFAULT_VALUE)
   }
 
-  def getTpcdsDataPath(): String = {
+  def getTpcdsDataPath: String = {
     System.getProperty(
       SystemParameters.TPCDS_DATA_PATH_KEY,
       SystemParameters.TPCDS_DATA_PATH_DEFAULT_VALUE)
   }
 
-  def getGlutenBackend(): String = {
+  def getGlutenBackend: String = {
     System.getProperty(
-      GlutenConfig.GLUTEN_BACKEND_LIB, GlutenConfig.GLUTEN_VELOX_BACKEND)
+      GlutenConfig.GLUTEN_BACKEND_LIB, GLUTEN_BACKEND)
   }
 }

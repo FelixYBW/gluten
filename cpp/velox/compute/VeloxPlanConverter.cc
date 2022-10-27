@@ -24,23 +24,20 @@
 #include <string>
 
 #include "ArrowTypeUtils.h"
+#include "RegistrationAllFunctions.cc"
 #include "arrow/c/Bridge.h"
 #include "arrow/c/bridge.h"
 #include "bridge.h"
 #include "compute/exec_backend.h"
 #include "velox/buffer/Buffer.h"
 #include "velox/exec/PlanNodeStats.h"
-#include "velox/functions/prestosql/aggregates/AverageAggregate.h"
-#include "velox/functions/prestosql/aggregates/CountAggregate.h"
-#include "velox/functions/prestosql/aggregates/MinMaxAggregates.h"
-#include "velox/functions/sparksql/Register.h"
-
+#include "velox/functions/prestosql/aggregates/RegisterAggregateFunctions.h"
 using namespace facebook::velox;
 using namespace facebook::velox::exec;
 using namespace facebook::velox::connector;
 using namespace facebook::velox::dwio::common;
 using namespace facebook::velox::parquet;
-
+using namespace facebook::velox::aggregate::prestosql;
 namespace velox {
 namespace compute {
 
@@ -48,7 +45,6 @@ namespace {
 const std::string kHiveConnectorId = "test-hive";
 const std::string kSparkBatchSizeKey =
     "spark.sql.execution.arrow.maxRecordsPerBatch";
-const std::string kVeloxPreferredBatchSize = "preferred_output_batch_size";
 const std::string kDynamicFiltersProduced = "dynamicFiltersProduced";
 const std::string kDynamicFiltersAccepted = "dynamicFiltersAccepted";
 const std::string kReplacedWithDynamicFilterRows =
@@ -69,7 +65,8 @@ std::shared_ptr<core::QueryCtx> createNewVeloxQueryCtx(
       std::unordered_map<std::string, std::shared_ptr<Config>>(),
       memory::MappedMemory::getInstance(),
       std::move(ctxRoot),
-      nullptr);
+      nullptr,
+      "");
   return ctx;
 }
 
@@ -77,28 +74,41 @@ std::shared_ptr<core::QueryCtx> createNewVeloxQueryCtx(
 void VeloxInitializer::Init() {
   // Setup and register.
   filesystems::registerLocalFileSystem();
+  filesystems::registerHdfsFileSystem();
   std::unique_ptr<folly::IOThreadPoolExecutor> executor =
       std::make_unique<folly::IOThreadPoolExecutor>(1);
+
+  // TODO(yuan): should read hdfs client conf from hdfs-client.xml from
+  // LIBHDFS3_CONF
+  std::string hdfsUri = "localhost:9000";
+  const char* envHdfsUri = std::getenv("VELOX_HDFS");
+  if (envHdfsUri != nullptr) {
+    hdfsUri = std::string(envHdfsUri);
+  }
+  auto hdfsPort = hdfsUri.substr(hdfsUri.find(":") + 1);
+  auto hdfsHost = hdfsUri.substr(0, hdfsUri.find(":"));
+  static const std::unordered_map<std::string, std::string> configurationValues(
+      {{"hive.hdfs.host", hdfsHost}, {"hive.hdfs.port", hdfsPort}});
+  auto properties =
+      std::make_shared<const core::MemConfig>(configurationValues);
   auto hiveConnector =
       getConnectorFactory(
           connector::hive::HiveConnectorFactory::kHiveConnectorName)
-          ->newConnector(kHiveConnectorId, nullptr);
+          ->newConnector(kHiveConnectorId, properties, nullptr);
   registerConnector(hiveConnector);
   parquet::registerParquetReaderFactory(ParquetReaderType::NATIVE);
-  // parquet::registerParquetReaderFactory(ParquetReaderType::DUCKDB);
   dwrf::registerDwrfReaderFactory();
-  // Register Velox functions.
-  functions::sparksql::registerFunctions("");
-  functions::prestosql::registerAllScalarFunctions();
-  aggregate::registerSumAggregate<aggregate::SumAggregate>("sum");
-  aggregate::registerAverageAggregate("avg");
-  aggregate::registerCountAggregate("count");
-  aggregate::registerMinMaxAggregate<
-      aggregate::MinAggregate,
-      aggregate::NonNumericMinAggregate>("min");
-  aggregate::registerMinMaxAggregate<
-      aggregate::MaxAggregate,
-      aggregate::NonNumericMaxAggregate>("max");
+  // Register Velox functions
+  registerAllFunctions();
+  registerAllAggregateFunctions();
+}
+
+void VeloxPlanConverter::setInputPlanNode(const ::substrait::SortRel& ssort) {
+  if (ssort.has_input()) {
+    setInputPlanNode(ssort.input());
+  } else {
+    throw std::runtime_error("Child expected");
+  }
 }
 
 void VeloxPlanConverter::setInputPlanNode(
@@ -212,6 +222,8 @@ void VeloxPlanConverter::setInputPlanNode(const ::substrait::Rel& srel) {
     setInputPlanNode(srel.read());
   } else if (srel.has_join()) {
     setInputPlanNode(srel.join());
+  } else if (srel.has_sort()) {
+    setInputPlanNode(srel.sort());
   } else {
     throw std::runtime_error("Rel is not supported: " + srel.DebugString());
   }
@@ -487,14 +499,14 @@ int64_t WholeStageResIter::sumOfRuntimeMetric(
 void WholeStageResIter::setConfToQueryContext(
     const std::shared_ptr<core::QueryCtx>& queryCtx) {
   std::unordered_map<std::string, std::string> configs = {};
-  // Only batch size is considered currently.
+  // Find batch size from Spark confs. If found, set it to Velox query context.
   auto got = confMap_.find(kSparkBatchSizeKey);
   if (got != confMap_.end()) {
-    configs[kVeloxPreferredBatchSize] = got->second;
+    configs[core::QueryConfig::kPreferredOutputBatchSize] = got->second;
   }
-  if (configs.size() > 0) {
-    queryCtx->setConfigOverridesUnsafe(std::move(configs));
-  }
+  // To align with Spark's behavior, set casting to int to be truncating.
+  configs[core::QueryConfig::kCastIntByTruncate] = std::to_string(true);
+  queryCtx->setConfigOverridesUnsafe(std::move(configs));
 }
 
 class VeloxPlanConverter::WholeStageResIterFirstStage

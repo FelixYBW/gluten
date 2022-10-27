@@ -47,6 +47,13 @@ using arrow::internal::checked_cast;
 #define SPLIT_BUFFER_SIZE 16 * 1024 * 1024
 #endif
 
+// #define SKIPWRITE
+
+static const std::vector<arrow::Compression::type> supported_codec = {
+    arrow::Compression::LZ4_FRAME,
+    arrow::Compression::ZSTD,
+    arrow::Compression::GZIP};
+
 template <typename T>
 std::string __m128i_toString(const __m128i var) {
   std::stringstream sstr;
@@ -342,17 +349,11 @@ arrow::Status Splitter::Init() {
         options_.data_file, CreateTempShuffleFile(configured_dirs_[0]));
   }
 
+  RETURN_NOT_OK(SetCompressType(options_.compression_type));
+
   auto& ipc_write_options = options_.ipc_write_options;
   ipc_write_options.memory_pool = options_.memory_pool.get();
   ipc_write_options.use_threads = false;
-
-  if (options_.compression_type == arrow::Compression::LZ4_FRAME) {
-    ARROW_ASSIGN_OR_RAISE(
-        ipc_write_options.codec,
-        arrow::util::Codec::Create(arrow::Compression::LZ4_FRAME));
-  } else {
-    ipc_write_options.codec = nullptr;
-  }
 
   // initialize tiny batch write options
   tiny_bach_write_options_ = ipc_write_options;
@@ -409,10 +410,13 @@ int64_t Splitter::CompressedSize(const arrow::RecordBatch& rb) {
 
 arrow::Status Splitter::SetCompressType(
     arrow::Compression::type compressed_type) {
-  if (compressed_type == arrow::Compression::LZ4_FRAME) {
+  if (std::any_of(
+          supported_codec.begin(),
+          supported_codec.end(),
+          [&](const auto& codec) { return codec == compressed_type; })) {
     ARROW_ASSIGN_OR_RAISE(
         options_.ipc_write_options.codec,
-        arrow::util::Codec::Create(arrow::Compression::LZ4_FRAME));
+        arrow::util::Codec::Create(compressed_type));
   } else {
     options_.ipc_write_options.codec = nullptr;
   }
@@ -836,7 +840,8 @@ arrow::Status Splitter::SpillPartition(int32_t partition_id) {
       partition_buffers_.begin(),
       partition_buffers_.end(),
       [partition_id](std::vector<arrow::BufferVector>& bufs) {
-        if (bufs[partition_id][0] != nullptr) {
+        if (bufs[partition_id].size() != 0 &&
+            bufs[partition_id][0] != nullptr) {
           // initialize all true once allocated
           auto addr = bufs[partition_id][0]->mutable_data();
           memset(addr, 0xff, bufs[partition_id][0]->capacity());

@@ -18,9 +18,9 @@
 package io.glutenproject.vectorized;
 
 import io.glutenproject.expression.ArrowConverterUtils;
+import io.glutenproject.memory.arrowalloc.ArrowBufferAllocators;
 import io.glutenproject.utils.ArrowAbiUtil;
 import org.apache.arrow.c.ArrowSchema;
-import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils;
 
 import java.io.IOException;
 
@@ -46,8 +46,8 @@ public class ShuffleSplitterJniWrapper {
   public long make(NativePartitioning part, long offheapPerTask, int bufferSize, String codec,
                    int batchCompressThreshold, String dataFile, int subDirsPerLocalDir,
                    String localDirs, boolean preferSpill, long memoryPoolId, boolean writeSchema) {
-    try (ArrowSchema schema = ArrowSchema.allocateNew(SparkMemoryUtils.contextArrowAllocator())) {
-      ArrowAbiUtil.exportSchema(SparkMemoryUtils.contextArrowAllocator(),
+    try (ArrowSchema schema = ArrowSchema.allocateNew(ArrowBufferAllocators.contextInstance())) {
+      ArrowAbiUtil.exportSchema(ArrowBufferAllocators.contextInstance(),
           ArrowConverterUtils.getSchemaFromBytesBuf(part.getSchema()), schema);
       return nativeMake(part.getShortName(), part.getNumPartitions(), schema.memoryAddress(),
           part.getExprList(), offheapPerTask, bufferSize, codec, batchCompressThreshold, dataFile,
@@ -84,12 +84,11 @@ public class ShuffleSplitterJniWrapper {
    * @param splitterId splitter instance id
    * @param numRows Rows per batch
    * @param cArray Addresses of ArrowArray
-   * @param firstRecordBatch whether this record batch is the first
    * record batch in the first partition.
    * @return If the firstRecorBatch is true, return the compressed size, otherwise -1.
    */
   public native long split(
-      long splitterId, int numRows, long cArray, boolean firstRecordBatch) throws IOException;
+      long splitterId, int numRows, long cArray) throws IOException;
 
   /**
    * Update the compress type.
