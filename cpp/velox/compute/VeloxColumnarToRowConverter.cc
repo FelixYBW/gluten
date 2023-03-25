@@ -42,10 +42,6 @@ uint32_t x_8[8] __attribute__((aligned(32))) = {0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x
 uint32_t x_seq[8] __attribute__((aligned(32))) = {0x0, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70};
 
 arrow::Status VeloxColumnarToRowConverter::Init() {
-  support_avx512_ = false;
-#if defined(__x86_64__)
-  support_avx512_ = __builtin_cpu_supports("avx512bw");
-#endif
 
   num_rows_ = rv_->size();
   num_cols_ = rv_->childrenSize();
@@ -120,10 +116,13 @@ arrow::Status VeloxColumnarToRowConverter::Init() {
   avg_rowsize_ = total_memory_size / num_rows_;
 
   // allocate one more cache line to ease avx operations
-  if (buffer_ == nullptr || buffer_->capacity() < total_memory_size + 64) {
-    ARROW_ASSIGN_OR_RAISE(buffer_, AllocateBuffer(total_memory_size + 64, arrow_pool_.get()));
-    memset(buffer_->mutable_data() + total_memory_size, 0, buffer_->capacity() - total_memory_size);
+  if (buffer_ == nullptr) {
+    ARROW_ASSIGN_OR_RAISE(buffer_, arrow::AllocateResizableBuffer(total_memory_size + 64, arrow_pool_.get()));
+  }else if (buffer_->capacity() < total_memory_size + 64){
+    ARROW_ASSIGN_OR_RAISE(buffer_, arrow::ResizePoolBuffer(buffer_, total_memory_size + 64, arrow_pool_.get()));
   }
+  //memset the padding 
+  memset(buffer_->mutable_data() + total_memory_size, 0, buffer_->capacity() - total_memory_size);
 
   buffer_address_ = buffer_->mutable_data();
 
@@ -239,6 +238,7 @@ arrow::Status VeloxColumnarToRowConverter::FillBuffer(
               __m256i v = _mm256_maskz_loadu_epi8(mask, value + k);
               _mm256_mask_storeu_epi8(buffer_address_ + offsets_[j] + buffer_cursor_[j] + k, mask, v);
               _mm_prefetch(&valuebuffers[j + 128 / sizeof(facebook::velox::StringView)], _MM_HINT_T0);
+              _mm_prefetch(&offsets_[j], _MM_HINT_T1);
             } else
 #endif
             {
@@ -254,44 +254,6 @@ arrow::Status VeloxColumnarToRowConverter::FillBuffer(
           break;
         }
         case arrow::Decimal128Type::type_id: {
-          /*auto out_array = dynamic_cast<arrow::Decimal128Array*>(array.get());
-          auto dtype = dynamic_cast<arrow::Decimal128Type*>(out_array->type().get());
-
-          int32_t precision = dtype->precision();
-
-          for (auto j = row_start; j < row_start + batch_rows; j++) {
-            const arrow::Decimal128 out_value(out_array->GetValue(j));
-            bool flag = out_array->IsNull(j);
-
-            if (precision <= 18) {
-              if (!flag) {
-                // Get the long value and write the long value
-                // Refer to the int64_t() method of Decimal128
-                int64_t long_value = static_cast<int64_t>(out_value.low_bits());
-                memcpy(buffer_address_ + offsets_[j] + field_offset, &long_value, sizeof(long));
-              } else {
-                SetNullAt(buffer_address_, offsets_[j], field_offset, col_index);
-              }
-            } else {
-              if (flag) {
-                SetNullAt(buffer_address_, offsets_[j], field_offset, col_index);
-              } else {
-                int32_t size;
-                auto out = ToByteArray(out_value, &size);
-                assert(size <= 16);
-
-                // write the variable value
-                memcpy(buffer_address_ + buffer_cursor_[j] + offsets_[j], &out[0], size);
-                // write the offset and size
-                int64_t offsetAndSize = ((int64_t)buffer_cursor_[j] << 32) | size;
-                memcpy(buffer_address_ + offsets_[j] + field_offset, &offsetAndSize, sizeof(int64_t));
-              }
-
-              // Update the cursor of the buffer.
-              int64_t new_cursor = buffer_cursor_[j] + 16;
-              buffer_cursor_[j] = new_cursor;
-            }
-          }*/
           return arrow::Status::Invalid("Unsupported data type decimal ");
           break;
         }
@@ -410,44 +372,6 @@ arrow::Status VeloxColumnarToRowConverter::FillBuffer(
           break;
         }
         case arrow::Decimal128Type::type_id: {
-          /*auto out_array = dynamic_cast<arrow::Decimal128Array*>(array.get());
-          auto dtype = dynamic_cast<arrow::Decimal128Type*>(out_array->type().get());
-
-          int32_t precision = dtype->precision();
-
-          for (auto j = row_start; j < row_start + batch_rows; j++) {
-            const arrow::Decimal128 out_value(out_array->GetValue(j));
-            bool flag = out_array->IsNull(j);
-
-            if (precision <= 18) {
-              if (!flag) {
-                // Get the long value and write the long value
-                // Refer to the int64_t() method of Decimal128
-                int64_t long_value = static_cast<int64_t>(out_value.low_bits());
-                memcpy(buffer_address_ + offsets_[j] + field_offset, &long_value, sizeof(long));
-              } else {
-                SetNullAt(buffer_address_, offsets_[j], field_offset, col_index);
-              }
-            } else {
-              if (flag) {
-                SetNullAt(buffer_address_, offsets_[j], field_offset, col_index);
-              } else {
-                int32_t size;
-                auto out = ToByteArray(out_value, &size);
-                assert(size <= 16);
-
-                // write the variable value
-                memcpy(buffer_address_ + buffer_cursor_[j] + offsets_[j], &out[0], size);
-                // write the offset and size
-                int64_t offsetAndSize = ((int64_t)buffer_cursor_[j] << 32) | size;
-                memcpy(buffer_address_ + offsets_[j] + field_offset, &offsetAndSize, sizeof(int64_t));
-              }
-
-              // Update the cursor of the buffer.
-              int64_t new_cursor = buffer_cursor_[j] + 16;
-              buffer_cursor_[j] = new_cursor;
-            }
-          }*/
           return arrow::Status::Invalid("Unsupported data type decimal ");
           break;
         }
@@ -507,8 +431,8 @@ arrow::Status VeloxColumnarToRowConverter::Write() {
   }
 
   int32_t i = 0;
-  // iterate 32K each batch
-  auto batch_num = 32 * 1024 / (16 + avg_rowsize_);
+  // iterate 16K each batch, since the L1 cache is 48K
+  auto batch_num = 16 * 1024 / (16 + avg_rowsize_);
   batch_num = (batch_num == 0 || batch_num > num_rows_) ? num_rows_ : batch_num;
   // file BATCH_ROW_NUM rows each time, fill by column. Make sure the row is in L1/L2 cache
   for (; i + batch_num < num_rows_; i += batch_num) {

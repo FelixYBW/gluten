@@ -31,7 +31,12 @@ namespace gluten {
 
 class ColumnarToRowConverter {
  public:
-  ColumnarToRowConverter(std::shared_ptr<arrow::MemoryPool> arrow_pool) : arrow_pool_(arrow_pool) {}
+  ColumnarToRowConverter(std::shared_ptr<arrow::MemoryPool> arrow_pool) : arrow_pool_(arrow_pool) {
+  support_avx512_ = false;
+#if defined(__x86_64__)
+  support_avx512_ = __builtin_cpu_supports("avx512bw");
+#endif
+  }
 
   virtual ~ColumnarToRowConverter() = default;
 
