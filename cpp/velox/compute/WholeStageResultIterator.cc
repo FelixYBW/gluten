@@ -55,6 +55,7 @@ const std::string kSpillStartPartitionBit = "spark.gluten.sql.columnar.backend.v
 const std::string kSpillPartitionBits = "spark.gluten.sql.columnar.backend.velox.spillPartitionBits";
 const std::string kSpillableReservationGrowthPct =
     "spark.gluten.sql.columnar.backend.velox.spillableReservationGrowthPct";
+const std::string kSpillCompressionKind = "spark.io.compression.codec";
 
 // metrics
 const std::string kDynamicFiltersProduced = "dynamicFiltersProduced";
@@ -324,6 +325,8 @@ std::unordered_map<std::string, std::string> WholeStageResultIterator::getQueryC
     configs[velox::core::QueryConfig::kSpillPartitionBits] = getConfigValue(confMap_, kSpillPartitionBits, "2");
     configs[velox::core::QueryConfig::kSpillableReservationGrowthPct] =
         getConfigValue(confMap_, kSpillableReservationGrowthPct, "25");
+    configs[velox::core::QueryConfig::kSpillCompressionKind] =
+	getConfigValue(confMap_, kSpillCompressionKind, "lz4");
   } catch (const std::invalid_argument& err) {
     std::string errDetails = err.what();
     throw std::runtime_error("Invalid conf arg: " + errDetails);

@@ -396,7 +396,8 @@ object GlutenConfig {
       GLUTEN_TASK_OFFHEAP_SIZE_IN_BYTES_KEY,
       GLUTEN_MAX_BATCH_SIZE_KEY,
       SQLConf.SESSION_LOCAL_TIMEZONE.key,
-      GLUTEN_DEFAULT_SESSION_TIMEZONE_KEY
+      GLUTEN_DEFAULT_SESSION_TIMEZONE_KEY,
+      "spark.io.compression.codec"
     )
     keys.forEach(
       k => {
