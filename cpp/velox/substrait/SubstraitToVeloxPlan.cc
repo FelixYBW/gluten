@@ -19,6 +19,7 @@
 #include "TypeUtils.h"
 #include "VariantToVectorConverter.h"
 #include "velox/type/Type.h"
+#include <iostream>
 
 #include "utils/ConfigExtractor.h"
 
@@ -756,6 +757,8 @@ core::PlanNodePtr SubstraitToVeloxPlanConverter::toVeloxPlan(const ::substrait::
           splitInfo->format = dwio::common::FileFormat::PARQUET;
           break;
         default:
+	  std::cout << "curent format is : " + file.file_format_case() << std::endl;
+	  VELOX_UNSUPPORTED("unsupported file format : " + file.file_format_case());
           splitInfo->format = dwio::common::FileFormat::UNKNOWN;
           break;
       }

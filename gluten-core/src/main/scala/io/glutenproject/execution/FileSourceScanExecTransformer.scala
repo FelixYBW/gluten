@@ -150,6 +150,9 @@ class FileSourceScanExecTransformer(
         s"Unsupported matching schema column names " +
           s"by field ids in native scan.")
     }
+    // scalastyle:off println
+    System.out.println("Validating FileSourceScanExecTransformer.")
+    // scalastyle:on println
     super.doValidateInternal()
   }
 

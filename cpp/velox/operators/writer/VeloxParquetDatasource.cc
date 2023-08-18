@@ -33,6 +33,7 @@
 #include "velox/dwio/common/Options.h"
 
 using namespace facebook;
+using namespace facebook::velox::common;
 using namespace facebook::velox::dwio::common;
 
 namespace gluten {

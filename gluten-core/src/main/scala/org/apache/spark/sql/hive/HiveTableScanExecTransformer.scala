@@ -127,11 +127,13 @@ class HiveTableScanExecTransformer(
   }
 
   override protected def doValidateInternal(): ValidationResult = {
+    // scalastyle:off println
+    System.out.println("Validating HiveTableScanExecTransformer.")
+    // scalastyle:on println
     val validationResult = super.doValidateInternal()
     if (!validationResult.isValid) {
       return validationResult
     }
-
     val tableMeta = relation.tableMeta
     val planOutput = output.asInstanceOf[Seq[AttributeReference]]
     var hasComplexType = false

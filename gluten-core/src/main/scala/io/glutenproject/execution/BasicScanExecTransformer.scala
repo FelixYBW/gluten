@@ -78,6 +78,9 @@ trait BasicScanExecTransformer extends TransformSupport with SupportFormat {
   }
 
   override protected def doValidateInternal(): ValidationResult = {
+    // scalastyle:off println
+    System.out.println("Validating BasicScanExecTransformer.")
+    // scalastyle:on println
     val fileFormat = ConverterUtils.getFileFormat(this)
     if (
       !BackendsApiManager.getTransformerApiInstance
