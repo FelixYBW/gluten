@@ -20,7 +20,7 @@ import io.glutenproject.GlutenConfig
 import io.glutenproject.backendsapi._
 import io.glutenproject.expression.WindowFunctionsBuilder
 import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat
-import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat.{DwrfReadFormat, OrcReadFormat, ParquetReadFormat}
+import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat.{DwrfReadFormat, OrcReadFormat, ParquetReadFormat, TextReadFormat}
 
 import org.apache.spark.sql.catalyst.expressions.{Alias, CumeDist, DenseRank, Descending, Expression, Literal, NamedExpression, NthValue, PercentRank, RangeFrame, Rank, RowNumber, SortOrder, SpecialFrameBoundary, SpecifiedWindowFrame}
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, Count, Sum}
@@ -84,6 +84,7 @@ object BackendSettings extends BackendSettingsApi {
 
     format match {
       case ParquetReadFormat => validateTypes
+      case TextReadFormat => validateTypes
       case DwrfReadFormat => true
       case OrcReadFormat =>
         val unsupportedDataTypes =
