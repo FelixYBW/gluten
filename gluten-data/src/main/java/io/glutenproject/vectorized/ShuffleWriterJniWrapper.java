@@ -50,8 +50,9 @@ public class ShuffleWriterJniWrapper extends JniInitialized {
       int subDirsPerLocalDir,
       String localDirs,
       boolean preferEvict,
-      long memoryManagerId,
       boolean writeEOS,
+      double reallocThreshold,
+      long memoryManagerId,
       long handle,
       long taskAttemptId) {
     return nativeMake(
@@ -67,8 +68,9 @@ public class ShuffleWriterJniWrapper extends JniInitialized {
         subDirsPerLocalDir,
         localDirs,
         preferEvict,
-        memoryManagerId,
         writeEOS,
+        reallocThreshold,
+        memoryManagerId,
         handle,
         taskAttemptId,
         0,
@@ -97,7 +99,8 @@ public class ShuffleWriterJniWrapper extends JniInitialized {
       long memoryManagerId,
       long handle,
       long taskAttemptId,
-      String partitionWriterType) {
+      String partitionWriterType,
+      double reallocThreshold) {
     return nativeMake(
         part.getShortName(),
         part.getNumPartitions(),
@@ -111,8 +114,9 @@ public class ShuffleWriterJniWrapper extends JniInitialized {
         0,
         null,
         true,
-        memoryManagerId,
         true,
+        reallocThreshold,
+        memoryManagerId,
         handle,
         taskAttemptId,
         pushBufferMaxSize,
@@ -133,8 +137,9 @@ public class ShuffleWriterJniWrapper extends JniInitialized {
       int subDirsPerLocalDir,
       String localDirs,
       boolean preferEvict,
-      long memoryManagerId,
       boolean writeEOS,
+      double reallocThreshold,
+      long memoryManagerId,
       long handle,
       long taskAttemptId,
       int pushBufferMaxSize,

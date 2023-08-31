@@ -645,21 +645,40 @@ arrow::Status VeloxShuffleWriter::updateInputHasNull(const velox::RowVector& rv)
 
 arrow::Status VeloxShuffleWriter::doSplit(const velox::RowVector& rv) {
   auto rowNum = rv.size();
-
   RETURN_NOT_OK(createPartition2Row(rowNum));
-
   RETURN_NOT_OK(updateInputHasNull(rv));
+  // buffer size based on offheap memory
+  auto empiricalBufferSize = calculatePartitionBufferSize(rv);
 
   for (auto pid = 0; pid < numPartitions_; ++pid) {
     if (partition2RowCount_[pid] > 0) {
+      auto newSize = std::max(empiricalBufferSize, partition2RowCount_[pid]);
       // make sure the size to be allocated is larger than the size to be filled
       // partitionBufferManager[pid]->prepareNextSplit();
       if (partition2BufferSize_[pid] == 0) {
         // allocate buffer if it's not yet allocated
-        auto newSize = std::max(calculatePartitionBufferSize(rv), partition2RowCount_[pid]);
         RETURN_NOT_OK(allocatePartitionBuffersWithRetry(pid, newSize));
+        // Update
+        partitionAvgBufferSize_[pid] = newSize;
+        partitionNumBuffers_[pid]++;
+      } else if (needRealloc(pid, newSize)) {
+        {
+          bool reuseBuffers = false;
+          ARROW_ASSIGN_OR_RAISE(auto rb, createArrowRecordBatchFromBuffer(pid, /*resetBuffers = */ !reuseBuffers));
+          if (rb) {
+            RETURN_NOT_OK(cacheRecordBatch(pid, *rb, reuseBuffers));
+          }
+        } // rb destructed
+        if (options_.prefer_evict) {
+          // if prefer_evict is set, evict current RowVector
+          RETURN_NOT_OK(evictPartition(pid));
+        }
+        RETURN_NOT_OK(allocatePartitionBuffersWithRetry(pid, newSize));
+        // Update
+        partitionAvgBufferSize_[pid] =
+            ((partitionAvgBufferSize_[pid] * partitionNumBuffers_[pid]) + newSize) / (partitionNumBuffers_[pid] + 1);
+        partitionNumBuffers_[pid]++;
       } else if (partitionBufferIdxBase_[pid] + partition2RowCount_[pid] > partition2BufferSize_[pid]) {
-        auto newSize = std::max(calculatePartitionBufferSize(rv), partition2RowCount_[pid]);
         // if the size to be filled + allready filled > the buffer size, need to free current buffers and allocate new
         // buffer
         if (newSize > partition2BufferSize_[pid]) {
@@ -677,6 +696,10 @@ arrow::Status VeloxShuffleWriter::doSplit(const velox::RowVector& rv) {
             RETURN_NOT_OK(evictPartition(pid));
           }
           RETURN_NOT_OK(allocatePartitionBuffersWithRetry(pid, newSize));
+          // Update
+          partitionAvgBufferSize_[pid] =
+              ((partitionAvgBufferSize_[pid] * partitionNumBuffers_[pid]) + newSize) / (partitionNumBuffers_[pid] + 1);
+          partitionNumBuffers_[pid]++;
         } else {
           // partition size after split is smaller than buffer size.
           // reuse the buffers.
@@ -710,7 +733,7 @@ arrow::Status VeloxShuffleWriter::doSplit(const velox::RowVector& rv) {
   printPartitionBuffer();
 
   return arrow::Status::OK();
-}
+} // namespace gluten
 
 arrow::Status VeloxShuffleWriter::splitRowVector(const velox::RowVector& rv) {
   // now start to split the RowVector
@@ -1108,6 +1131,8 @@ arrow::Status VeloxShuffleWriter::splitFixedWidthValueBuffer(const velox::RowVec
     printColumnsInfo();
 
     binaryArrayEmpiricalSize_.resize(binaryColumnIndices_.size(), 0);
+    partitionAvgBufferSize_.resize(numPartitions_, 0);
+    partitionNumBuffers_.resize(numPartitions_, 0);
 
     inputHasNull_.resize(simpleColumnIndices_.size(), false);
 
@@ -1127,24 +1152,29 @@ arrow::Status VeloxShuffleWriter::splitFixedWidthValueBuffer(const velox::RowVec
     return arrow::Status::OK();
   }
 
+  bool VeloxShuffleWriter::needRealloc(uint32_t partitionId, uint64_t newSize) {
+    auto avgBufferSize = partitionAvgBufferSize_[partitionId];
+    return avgBufferSize != 0 &&
+        ((newSize > (1 + options_.buffer_realloc_threshold) * avgBufferSize ||
+          newSize < (1 - options_.buffer_realloc_threshold) * avgBufferSize));
+  }
+
   uint32_t VeloxShuffleWriter::calculatePartitionBufferSize(const velox::RowVector& rv) {
     uint32_t sizePerRow = 0;
     auto numRows = rv.size();
     for (size_t i = fixedWidthColumnCount_; i < simpleColumnIndices_.size(); ++i) {
       auto index = i - fixedWidthColumnCount_;
-      if (binaryArrayEmpiricalSize_[index] == 0) {
-        auto column = rv.childAt(simpleColumnIndices_[i]);
-        auto stringViewColumn = column->asFlatVector<velox::StringView>();
-        assert(stringViewColumn);
+      auto column = rv.childAt(simpleColumnIndices_[i]);
+      auto stringViewColumn = column->asFlatVector<velox::StringView>();
+      assert(stringViewColumn);
 
-        // accumulate length
-        uint64_t length = stringViewColumn->values()->size();
-        for (auto& buffer : stringViewColumn->stringBuffers()) {
-          length += buffer->size();
-        }
-
-        binaryArrayEmpiricalSize_[index] = length % numRows == 0 ? length / numRows : length / numRows + 1;
+      // accumulate length
+      uint64_t length = stringViewColumn->values()->size();
+      for (auto& buffer : stringViewColumn->stringBuffers()) {
+        length += buffer->size();
       }
+
+      binaryArrayEmpiricalSize_[index] = (length + numRows - 1) / numRows;
     }
 
     VS_PRINT_VECTOR_MAPPING(binaryArrayEmpiricalSize_);

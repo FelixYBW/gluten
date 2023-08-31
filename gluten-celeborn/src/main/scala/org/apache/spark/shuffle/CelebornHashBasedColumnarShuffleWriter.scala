@@ -146,7 +146,8 @@ class CelebornHashBasedColumnarShuffleWriter[K, V](
               .getNativeInstanceId,
             handle,
             context.taskAttemptId(),
-            "celeborn"
+            "celeborn",
+            GlutenConfig.getConf.columnarShuffleReallocThreshold
           )
         }
         val startTime = System.nanoTime()

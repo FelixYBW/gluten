@@ -219,6 +219,8 @@ class VeloxShuffleWriter final : public ShuffleWriter {
 
   arrow::Status doSplit(const facebook::velox::RowVector& rv);
 
+  inline bool needRealloc(uint32_t partitionId, uint64_t newSize);
+
   uint32_t calculatePartitionBufferSize(const facebook::velox::RowVector& rv);
 
   arrow::Status allocatePartitionBuffers(uint32_t partitionId, uint32_t newSize);
@@ -335,6 +337,8 @@ class VeloxShuffleWriter final : public ShuffleWriter {
   std::vector<std::vector<uint8_t*>> partitionFixedWidthValueAddrs_;
 
   std::vector<uint64_t> binaryArrayEmpiricalSize_;
+  std::vector<uint64_t> partitionAvgBufferSize_;
+  std::vector<uint64_t> partitionNumBuffers_;
 
   std::vector<std::vector<BinaryBuf>> partitionBinaryAddrs_;
 

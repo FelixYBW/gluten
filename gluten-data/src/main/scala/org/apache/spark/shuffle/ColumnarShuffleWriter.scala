@@ -78,6 +78,8 @@ class ColumnarShuffleWriter[K, V](
 
   private val writeEOS = GlutenConfig.getConf.columnarShuffleWriteEOS
 
+  private val reallocThreshold = GlutenConfig.getConf.columnarShuffleReallocThreshold
+
   private val jniWrapper = new ShuffleWriterJniWrapper
 
   private var nativeShuffleWriter: Long = -1L
@@ -135,6 +137,8 @@ class ColumnarShuffleWriter[K, V](
             blockManager.subDirsPerLocalDir,
             localDirs,
             preferSpill,
+            writeEOS,
+            reallocThreshold,
             NativeMemoryManagers
               .create(
                 "ShuffleWriter",
@@ -155,7 +159,6 @@ class ColumnarShuffleWriter[K, V](
                 }
               )
               .getNativeInstanceId,
-            writeEOS,
             handle,
             taskContext.taskAttemptId()
           )
