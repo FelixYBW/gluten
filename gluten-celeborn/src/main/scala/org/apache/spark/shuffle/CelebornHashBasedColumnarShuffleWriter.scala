@@ -150,7 +150,8 @@ class CelebornHashBasedColumnarShuffleWriter[K, V](
           )
         }
         val startTime = System.nanoTime()
-        val bytes = jniWrapper.split(nativeShuffleWriter, cb.numRows, handle, availableOffHeapPerTask())
+        val bytes =
+          jniWrapper.split(nativeShuffleWriter, cb.numRows, handle, availableOffHeapPerTask())
         dep.metrics("dataSize").add(bytes)
         dep.metrics("splitTime").add(System.nanoTime() - startTime)
         dep.metrics("numInputRows").add(cb.numRows)

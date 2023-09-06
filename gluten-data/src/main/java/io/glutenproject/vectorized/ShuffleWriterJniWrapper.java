@@ -162,8 +162,8 @@ public class ShuffleWriterJniWrapper extends JniInitialized {
    * @param handler handler of Velox Vector
    * @return batch bytes.
    */
-  public native long split(long shuffleWriterId, int numRows, long handler,
-      long memLimit) throws IOException;
+  public native long split(long shuffleWriterId, int numRows, long handler, long memLimit)
+      throws IOException;
 
   /**
    * Write the data remained in the buffers hold by native shuffle writer to each partition's
