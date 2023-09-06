@@ -728,7 +728,6 @@ JNIEXPORT jlong JNICALL Java_io_glutenproject_vectorized_ShuffleWriterJniWrapper
     jobject,
     jstring partitioningNameJstr,
     jint numPartitions,
-    jlong offheapPerTask,
     jint bufferSize,
     jstring codecJstr,
     jstring codecBackendJstr,
@@ -760,7 +759,6 @@ JNIEXPORT jlong JNICALL Java_io_glutenproject_vectorized_ShuffleWriterJniWrapper
   if (bufferSize > 0) {
     shuffleWriterOptions.buffer_size = bufferSize;
   }
-  shuffleWriterOptions.offheap_per_task = offheapPerTask;
 
   if (codecJstr != NULL) {
     shuffleWriterOptions.compression_type = getCompressionType(env, codecJstr);
@@ -869,7 +867,8 @@ JNIEXPORT jlong JNICALL Java_io_glutenproject_vectorized_ShuffleWriterJniWrapper
     jobject,
     jlong shuffleWriterId,
     jint numRows,
-    jlong handle) {
+    jlong handle,
+    jlong memLimit) {
   JNI_METHOD_START
   auto shuffleWriter = shuffleWriterHolder.lookup(shuffleWriterId);
   if (!shuffleWriter) {
@@ -880,7 +879,7 @@ JNIEXPORT jlong JNICALL Java_io_glutenproject_vectorized_ShuffleWriterJniWrapper
   // The column batch maybe VeloxColumnBatch or ArrowCStructColumnarBatch(FallbackRangeShuffleWriter)
   std::shared_ptr<ColumnarBatch> batch = columnarBatchHolder.lookup(handle);
   auto numBytes = batch->numBytes();
-  gluten::arrowAssertOkOrThrow(shuffleWriter->split(batch), "Native split: shuffle writer split failed");
+  gluten::arrowAssertOkOrThrow(shuffleWriter->split(batch, memLimit), "Native split: shuffle writer split failed");
   return numBytes;
   JNI_METHOD_END(-1L)
 }

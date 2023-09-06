@@ -60,6 +60,9 @@ namespace gluten {
 #endif
 // #define SKIPWRITE
 
+#define GLUTEN_PRINT_DEBUG
+
+
 #if defined(__x86_64__)
 template <typename T>
 std::string m128iToString(const __m128i var) {
@@ -533,7 +536,7 @@ std::shared_ptr<arrow::Buffer> VeloxShuffleWriter::generateComplexTypeBuffers(ve
   return valueBuffer;
 }
 
-arrow::Status VeloxShuffleWriter::split(std::shared_ptr<ColumnarBatch> cb) {
+arrow::Status VeloxShuffleWriter::split(std::shared_ptr<ColumnarBatch> cb, int64_t memLimit) {
   if (options_.partitioning_name == "single") {
     auto veloxColumnBatch = std::dynamic_pointer_cast<VeloxColumnarBatch>(cb);
     VELOX_DCHECK_NOT_NULL(veloxColumnBatch);
@@ -568,7 +571,7 @@ arrow::Status VeloxShuffleWriter::split(std::shared_ptr<ColumnarBatch> cb) {
     auto rvBatch = std::dynamic_pointer_cast<VeloxColumnarBatch>(batches[1]);
     auto& rv = *rvBatch->getFlattenedRowVector();
     RETURN_NOT_OK(initFromRowVector(rv));
-    RETURN_NOT_OK(doSplit(rv));
+    RETURN_NOT_OK(doSplit(rv, memLimit));
   } else {
     auto veloxColumnBatch = std::dynamic_pointer_cast<VeloxColumnarBatch>(cb);
     VELOX_DCHECK_NOT_NULL(veloxColumnBatch);
@@ -578,11 +581,11 @@ arrow::Status VeloxShuffleWriter::split(std::shared_ptr<ColumnarBatch> cb) {
       RETURN_NOT_OK(partitioner_->compute(pidArr, rv.size(), row2Partition_, partition2RowCount_));
       auto strippedRv = getStrippedRowVector(rv);
       RETURN_NOT_OK(initFromRowVector(*strippedRv));
-      RETURN_NOT_OK(doSplit(*strippedRv));
+      RETURN_NOT_OK(doSplit(*strippedRv,memLimit));
     } else {
       RETURN_NOT_OK(initFromRowVector(rv));
       RETURN_NOT_OK(partitioner_->compute(nullptr, rv.size(), row2Partition_, partition2RowCount_));
-      RETURN_NOT_OK(doSplit(rv));
+      RETURN_NOT_OK(doSplit(rv,memLimit));
     }
   }
   return arrow::Status::OK();
@@ -643,12 +646,12 @@ arrow::Status VeloxShuffleWriter::updateInputHasNull(const velox::RowVector& rv)
   return arrow::Status::OK();
 }
 
-arrow::Status VeloxShuffleWriter::doSplit(const velox::RowVector& rv) {
+arrow::Status VeloxShuffleWriter::doSplit(const velox::RowVector& rv, int64_t memLimit) {
   auto rowNum = rv.size();
   RETURN_NOT_OK(createPartition2Row(rowNum));
   RETURN_NOT_OK(updateInputHasNull(rv));
   // buffer size based on offheap memory
-  auto empiricalBufferSize = calculatePartitionBufferSize(rv);
+  auto empiricalBufferSize = calculatePartitionBufferSize(rv, memLimit);
 
   for (auto pid = 0; pid < numPartitions_; ++pid) {
     if (partition2RowCount_[pid] > 0) {
@@ -1018,13 +1021,19 @@ arrow::Status VeloxShuffleWriter::splitFixedWidthValueBuffer(const velox::RowVec
           binaryBuf.valueCapacity = capacity;
           dstValuePtr = binaryBuf.valuePtr + valueOffset - stringLen;
 
-          std::cout << "Split value buffer resized colIdx" << binaryIdx << std::endl;
-          VsPrintSplit(" dst_start", dstOffsetBase[x]);
-          VsPrintSplit(" dst_end", dstOffsetBase[x + 1]);
-          VsPrintSplit(" old size", oldCapacity);
-          VsPrintSplit(" new size", capacity);
-          VsPrintSplit(" row", partitionBufferIdxBase_[pid]);
-          VsPrintSplitLF(" string len", stringLen);
+	  
+#ifdef GLUTEN_PRINT_DEBUG
+          std::cout << "Split value buffer resized colIdx " << binaryIdx << " emphasize " << binaryArrayEmpiricalSize_[binaryIdx] << std::endl;
+
+#endif
+
+          VsPrintSplit(" dst_start ", dstOffsetBase[x]);
+          VsPrintSplit(" dst_end ", dstOffsetBase[x + 1]);
+          VsPrintSplit(" old size ", oldCapacity);
+          VsPrintSplit(" new size ", capacity);
+          VsPrintSplit(" row ", partitionBufferIdxBase_[pid]);
+          VsPrintSplit(" emphasize ", binaryArrayEmpiricalSize_[binaryIdx]);
+          VsPrintSplitLF(" string len ", stringLen);
         }
 
         // 2. copy value
@@ -1159,7 +1168,7 @@ arrow::Status VeloxShuffleWriter::splitFixedWidthValueBuffer(const velox::RowVec
           newSize < (1 - options_.buffer_realloc_threshold) * avgBufferSize));
   }
 
-  uint32_t VeloxShuffleWriter::calculatePartitionBufferSize(const velox::RowVector& rv) {
+  uint32_t VeloxShuffleWriter::calculatePartitionBufferSize(const velox::RowVector& rv, int64_t memLimit) {
     uint32_t sizePerRow = 0;
     auto numRows = rv.size();
     for (size_t i = fixedWidthColumnCount_; i < simpleColumnIndices_.size(); ++i) {
@@ -1189,21 +1198,24 @@ arrow::Status VeloxShuffleWriter::splitFixedWidthValueBuffer(const velox::RowVec
 
     VS_PRINTLF(sizePerRow);
 
-    uint64_t preAllocRowCnt = options_.offheap_per_task > 0 && sizePerRow > 0
-        ? options_.offheap_per_task / sizePerRow / numPartitions_ >> 2
+    uint64_t preAllocRowCnt = memLimit > 0 && sizePerRow > 0
+        ? memLimit / sizePerRow / numPartitions_ >> 2
         : options_.buffer_size;
     preAllocRowCnt = std::min(preAllocRowCnt, (uint64_t)options_.buffer_size);
 
     VS_PRINTLF(preallocRowCnt);
 
     std::cout << "[SHUFFLE WRITER LOG]: Task ID: " << options_.task_attempt_id
-              << ", options_.offheap_per_task: " << options_.offheap_per_task
+              << ", memLimit: " << memLimit
               << ", sizePerRow: " << sizePerRow
               << ", preAllocRowCnt: " << preAllocRowCnt
               << ", numPartitions_: " << numPartitions_
               << ", options_.buffer_size: " << options_.buffer_size
               << ", preAllocRowCnt: " << preAllocRowCnt
               << std::endl;
+
+    std::cout << "split buffer size " << std::to_string(options_.memory_pool->bytes_allocated()) << std::endl;
+    std::cout << "spill buffer size " << std::to_string(pool_->bytes_allocated()) << std::endl;
     return preAllocRowCnt;
   }
 
