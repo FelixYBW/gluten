@@ -133,7 +133,7 @@ case class VeloxStringSplitTransformer(
 
     val limit = limitExpr.doTransform(args).asInstanceOf[IntLiteralNode].getValue
     val regex = regexExpr.doTransform(args).asInstanceOf[StringLiteralNode].getValue
-    if (limit > 0 || regex.length > 1) {
+    if (limit > 0) {
       throw new UnsupportedOperationException(
         s"$original supported single-length regex and negative limit, but given $limit and $regex")
     }
