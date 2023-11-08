@@ -45,8 +45,15 @@
     <scala.version>2.12.15</scala.version>
     <spark.major.version>3</spark.major.version>
     <sparkbundle.version>3.2</sparkbundle.version>
+<<<<<<< HEAD
     <spark.version>3.4.1</spark.version>
     <sparkshim.artifactId>spark-sql-columnar-shims-spark32</sparkshim.artifactId>
+=======
+    <spark.shim.module>spark32</spark.shim.module>
+    <spark.test.module>spark32</spark.test.module>
+    <spark.version>3.2.0</spark.version>
+    <sparkshim.artifactId>spark-sql-columnar-shims-${spark.shim.module}</sparkshim.artifactId>
+>>>>>>> ce62d59f... fix for pinterest spark
     <celeborn.version>0.3.0-incubating</celeborn.version>
     <arrow.version>12.0.0</arrow.version>
     <arrow-memory.artifact>arrow-memory-unsafe</arrow-memory.artifact>
@@ -111,7 +118,7 @@
       <properties>
         <sparkbundle.version>3.2</sparkbundle.version>
         <sparkshim.artifactId>spark-sql-columnar-shims-spark32</sparkshim.artifactId>
-        <spark.version>3.2.2</spark.version>
+        <spark.version>3.2.0</spark.version>
         <delta.version>2.0.1</delta.version>
         <delta.binary.version>20</delta.binary.version>
       </properties>
