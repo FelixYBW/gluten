@@ -160,7 +160,26 @@ void VeloxBackend::init(const std::unordered_map<std::string, std::string>& conf
   velox::filesystems::registerLocalFileSystem();
   initJolFilesystem(veloxcfg);
   initCache(veloxcfg);
-  initConnector(veloxcfg);
+  // initIOExecutor(conf);
+  int32_t ioThreads = 16;
+  auto got = conf.find(kVeloxIOThreads);
+  if (got != conf.end()) {
+    ioThreads = std::stoi(got->second);
+    LOG(INFO) << "STARTUP: Using io threads: " << ioThreads;
+  }
+  ioExecutor_ = std::make_unique<folly::IOThreadPoolExecutor>(ioThreads);
+  ioExecutor2_ = std::make_unique<folly::IOThreadPoolExecutor>(ioThreads);
+  FLAGS_split_preload_per_driver = 4;
+
+#ifdef GLUTEN_PRINT_DEBUG
+  printConf(veloxcfg);
+#endif
+
+  auto hiveConnector =
+      velox::connector::getConnectorFactory(velox::connector::hive::HiveConnectorFactory::kHiveConnectorName)
+          ->newConnector(kHiveConnectorId, properties, ioExecutor_.get(), ioExecutor2_.get());
+
+  registerConnector(hiveConnector);
 
   // Register Velox functions
   registerAllFunctions();
