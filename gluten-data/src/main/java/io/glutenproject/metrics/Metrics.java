@@ -45,6 +45,7 @@ public class Metrics implements IMetrics {
   public long[] skippedStrides;
   public long[] processedStrides;
   public long[] remainingFilterTime;
+  public long[] fetchWaitTime;
   public SingleMetric singleMetric = new SingleMetric();
 
   /** Create an instance for native metrics. */
@@ -75,7 +76,8 @@ public class Metrics implements IMetrics {
       long[] processedSplits,
       long[] skippedStrides,
       long[] processedStrides,
-      long[] remainingFilterTime) {
+      long[] remainingFilterTime,
+      long[] fetchWaitTime) {
     this.inputRows = inputRows;
     this.inputVectors = inputVectors;
     this.inputBytes = inputBytes;
@@ -103,6 +105,7 @@ public class Metrics implements IMetrics {
     this.skippedStrides = skippedStrides;
     this.processedStrides = processedStrides;
     this.remainingFilterTime = remainingFilterTime;
+    this.fetchWaitTime = fetchWaitTime;
   }
 
   public OperatorMetrics getOperatorMetrics(int index) {
@@ -136,7 +139,8 @@ public class Metrics implements IMetrics {
         processedSplits[index],
         skippedStrides[index],
         processedStrides[index],
-        remainingFilterTime[index]);
+        remainingFilterTime[index],
+        fetchWaitTime[index]);
   }
 
   public SingleMetric getSingleMetrics() {

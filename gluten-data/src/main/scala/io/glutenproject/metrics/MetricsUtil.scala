@@ -110,6 +110,7 @@ object MetricsUtil extends Logging {
     var skippedStrides: Long = 0
     var processedStrides: Long = 0
     var remainingFilterTime: Long = 0
+    var fetchWaitTime: Long = 0
 
     val metricsIterator = operatorMetrics.iterator()
     while (metricsIterator.hasNext) {
@@ -132,6 +133,7 @@ object MetricsUtil extends Logging {
       skippedStrides += metrics.skippedStrides
       processedStrides += metrics.processedStrides
       remainingFilterTime += metrics.remainingFilterTime
+      fetchWaitTime += metrics.fetchWaitTime
     }
 
     new OperatorMetrics(
@@ -160,7 +162,8 @@ object MetricsUtil extends Logging {
       processedSplits,
       skippedStrides,
       processedStrides,
-      remainingFilterTime
+      remainingFilterTime,
+      fetchWaitTime
     )
   }
 
