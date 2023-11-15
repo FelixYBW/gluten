@@ -54,6 +54,7 @@ DECLARE_int32(split_preload_per_driver);
 DECLARE_bool(velox_exception_user_stacktrace_enabled);
 DECLARE_int32(velox_memory_num_shared_leaf_pools);
 DECLARE_bool(velox_memory_use_hugepages);
+DECLARE_bool(FLAGS_wsVRLoad);
 
 using namespace facebook;
 
@@ -99,6 +100,12 @@ const uint32_t kVeloxIOThreadsDefault = 0;
 
 const std::string kVeloxSplitPreloadPerDriver = "spark.gluten.sql.columnar.backend.velox.SplitPreloadPerDriver";
 const uint32_t kVeloxSplitPreloadPerDriverDefault = 2;
+
+const std::string kVeloxParallelRead = "spark.gluten.sql.columnar.backend.velox.parallelRead";
+const bool kVeloxParallelReadDefault = false;
+
+const std::string kVeloxVRlRead = "spark.gluten.sql.columnar.backend.velox.vrload";
+const bool kVeloxVRlReadDefault = false;
 
 // udf
 const std::string kVeloxUdfLibraryPaths = "spark.gluten.sql.columnar.backend.velox.udfLibraryPaths";
@@ -274,9 +281,9 @@ class MemoryPoolReplacedHiveConnector : public velox::connector::hive::HiveConne
         connectorQueryCtx->cache(),
         connectorQueryCtx->scanId(),
         executor_,
-	//Enable parallel read
-	true,
-	executor2_,
+        // Enable parallel read
+        true,
+        executor2_,
         options);
   }
 
@@ -285,10 +292,9 @@ class MemoryPoolReplacedHiveConnector : public velox::connector::hive::HiveConne
 };
 } // namespace
 
-void VeloxBackend::initConnector(const std::unordered_map<std::string, std::string>& conf) {
-  int32_t ioThreads = std::stoi(getConfigValue(conf, kVeloxIOThreads, kVeloxIOThreadsDefault));
-  int32_t splitPreloadPerDriver =
-      std::stoi(getConfigValue(conf, kVeloxSplitPreloadPerDriver, kVeloxSplitPreloadPerDriverDefault));
+void VeloxBackend::initConnector(const facebook::velox::Config* conf) {
+  int32_t ioThreads = conf->get<int32_t>(kVeloxIOThreads, kVeloxIOThreadsDefault);
+  int32_t splitPreloadPerDriver = conf->get<int32_t>(kVeloxSplitPreloadPerDriver, kVeloxSplitPreloadPerDriverDefault);
 
   if (splitPreloadPerDriver > 0 && ioThreads > 0) {
     LOG(INFO) << "STARTUP: Using split preloading, Split preload per driver: " << splitPreloadPerDriver
@@ -299,14 +305,14 @@ void VeloxBackend::initConnector(const std::unordered_map<std::string, std::stri
 
 #ifdef ENABLE_S3
   // yuan.zhou@intel.com
-  std::string awsAccessKey = conf.at("spark.hadoop.fs.s3a.access.key");
-  std::string awsSecretKey = conf.at("spark.hadoop.fs.s3a.secret.key");
-  std::string awsEndpoint = conf.at("spark.hadoop.fs.s3a.endpoint");
-  std::string sslEnabled = conf.at("spark.hadoop.fs.s3a.connection.ssl.enabled");
-  std::string pathStyleAccess = conf.at("spark.hadoop.fs.s3a.path.style.access");
-  std::string useInstanceCredentials = conf.at("spark.hadoop.fs.s3a.use.instance.credentials");
-  std::string iamRole = conf.at("spark.hadoop.fs.s3a.iam.role");
-  std::string iamRoleSessionName = conf.at("spark.hadoop.fs.s3a.iam.role.session.name");
+  std::string awsAccessKey = conf->get<std::string>("spark.hadoop.fs.s3a.access.key", "");
+  std::string awsSecretKey = conf->get<std::string>("spark.hadoop.fs.s3a.secret.key", "");
+  std::string awsEndpoint = conf->get<std::string>("spark.hadoop.fs.s3a.endpoint", "");
+  bool sslEnabled = conf->get<bool>("spark.hadoop.fs.s3a.connection.ssl.enabled", false);
+  bool pathStyleAccess = conf->get<bool>("spark.hadoop.fs.s3a.path.style.access", false);
+  bool useInstanceCredentials = conf->get<bool>("spark.hadoop.fs.s3a.use.instance.credentials", false);
+  std::string iamRole = conf->get<std::string>("spark.hadoop.fs.s3a.iam.role", "");
+  std::string iamRoleSessionName = conf->get<std::string>("spark.hadoop.fs.s3a.iam.role.session.name", "");
 
   const char* envAwsAccessKey = std::getenv("AWS_ACCESS_KEY_ID");
   if (envAwsAccessKey != nullptr) {
@@ -322,9 +328,9 @@ void VeloxBackend::initConnector(const std::unordered_map<std::string, std::stri
   }
 
   std::unordered_map<std::string, std::string> s3Config({});
-  if (useInstanceCredentials == "true") {
+  if (useInstanceCredentials) {
     s3Config.insert({
-        {"hive.s3.use-instance-credentials", useInstanceCredentials},
+        {"hive.s3.use-instance-credentials", "true"},
     });
   } else if (!iamRole.empty()) {
     s3Config.insert({
@@ -342,37 +348,43 @@ void VeloxBackend::initConnector(const std::unordered_map<std::string, std::stri
     });
   }
   // Only need to set s3 endpoint when not use instance credentials.
-  if (useInstanceCredentials != "true") {
+  if (!useInstanceCredentials) {
     s3Config.insert({
         {"hive.s3.endpoint", awsEndpoint},
     });
   }
+
   s3Config.insert({
-      {"hive.s3.ssl.enabled", sslEnabled},
-      {"hive.s3.path-style-access", pathStyleAccess},
+      {"hive.s3.ssl.enabled", sslEnabled ? "true" : "false"},
+      {"hive.s3.path-style-access", pathStyleAccess ? "true" : "false"},
   });
 
   configurationValues.merge(s3Config);
 #endif
+
   ioExecutor_ = std::make_unique<folly::IOThreadPoolExecutor>(ioThreads);
   ioExecutor2_ = std::make_unique<folly::IOThreadPoolExecutor>(ioThreads);
   FLAGS_split_preload_per_driver = splitPreloadPerDriver;
 
-  configurationValues.insert({{"enable_parallel_load", getConfigValue(conf, kVeloxParallelRead, kVeloxParallelReadDefault)}});
+  configurationValues.insert(
+      {{"enable_parallel_load", conf->get<bool>(kVeloxParallelRead, kVeloxParallelReadDefault) ? "true" : "false"}});
 
-  FLAGS_wsVRLoad = getConfigValue(conf, kVeloxVRlRead, kVeloxVRlReadDefault) == "true";
+  FLAGS_wsVRLoad = conf->get<bool>(kVeloxVRlRead, kVeloxVRlReadDefault);
 
   auto properties = std::make_shared<const velox::core::MemConfig>(configurationValues);
-
 
   if (ioThreads > 0) {
     // Use global memory pool for hive connector if SplitPreloadPerDriver was enabled. Otherwise, the allocated memory
     // blocks might cause unexpected behavior (e.g. crash) since the allocations were proceed in background IO threads.
     velox::connector::registerConnector(std::make_shared<MemoryPoolReplacedHiveConnector>(
-        gluten::defaultLeafVeloxMemoryPool().get(), kHiveConnectorId, properties, ioExecutor_.get(), ioExecutor2_.get()));
+        gluten::defaultLeafVeloxMemoryPool().get(),
+        kHiveConnectorId,
+        properties,
+        ioExecutor_.get(),
+        ioExecutor2_.get()));
   } else {
-    velox::connector::registerConnector(
-        std::make_shared<velox::connector::hive::HiveConnector>(kHiveConnectorId, properties, ioExecutor_.get(), ioExecutor2_.get()));
+    velox::connector::registerConnector(std::make_shared<velox::connector::hive::HiveConnector>(
+        kHiveConnectorId, properties, ioExecutor_.get(), ioExecutor2_.get()));
   }
 }
 

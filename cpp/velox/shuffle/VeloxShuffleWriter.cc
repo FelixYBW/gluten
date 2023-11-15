@@ -1217,10 +1217,9 @@ arrow::Status VeloxShuffleWriter::splitFixedWidthValueBuffer(const facebook::vel
           ARROW_ASSIGN_OR_RAISE(validityBuffer, arrow::AllocateResizableBuffer(newSize, partitionBufferPool_.get()));
           // initialize all as false.
           memset(validityBuffer->mutable_data(), 0, validityBuffer->capacity());
-          partitionValidityAddrs_[fixedWidthIdx][partitionId] = validityBuffer->mutable_data();
+          partitionValidityAddrs_[i][partitionId] = validityBuffer->mutable_data();
           // No need to create valueBuffer for NullType.
-          partitionBuffers_[fixedWidthIdx][partitionId] = {std::move(validityBuffer), nullptr};
-          fixedWidthIdx++;
+          buffers = {std::move(validityBuffer), nullptr};
           break;
         }
         default: {

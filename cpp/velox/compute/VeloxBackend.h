@@ -58,8 +58,8 @@ class VeloxBackend {
 
   void init(const std::unordered_map<std::string, std::string>& conf);
   void initCache(const facebook::velox::Config* conf);
-  void initConnector(const facebook::velox::Config* conf);
   void initUdf(const facebook::velox::Config* conf);
+  void initConnector(const facebook::velox::Config* conf);
 
   void initJolFilesystem(const facebook::velox::Config* conf);
 
