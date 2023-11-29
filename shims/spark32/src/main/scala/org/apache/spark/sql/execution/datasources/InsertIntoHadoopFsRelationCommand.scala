@@ -170,8 +170,9 @@ case class InsertIntoHadoopFsRelationCommand(
     val committer = FileCommitProtocol.instantiate(
       sparkSession.sessionState.conf.fileCommitProtocolClass,
       jobId = jobId,
-      outputPath = outputPath.toString,
-      dynamicPartitionOverwrite = dynamicPartitionOverwrite)
+      outputPath = formattedOutputPath.toString,
+      dynamicPartitionOverwrite = !isDirectWrite && dynamicPartitionOverwrite
+    )
 
     val doInsertion = if (mode == SaveMode.Append) {
       true
@@ -187,7 +188,9 @@ case class InsertIntoHadoopFsRelationCommand(
             // For dynamic partition overwrite, do not delete partition directories ahead.
             true
           } else {
-            deleteMatchingPartitions(fs, qualifiedOutputPath, customPartitionLocations, committer)
+            if (!isDirectWrite) {
+              deleteMatchingPartitions(fs, qualifiedOutputPath, customPartitionLocations, committer)
+            }
             true
           }
         case (SaveMode.Overwrite, _) | (SaveMode.ErrorIfExists, false) =>

@@ -366,14 +366,16 @@ void VeloxBackend::initConnector(const facebook::velox::Config* conf) {
   ioExecutor2_ = std::make_unique<folly::IOThreadPoolExecutor>(ioThreads);
   FLAGS_split_preload_per_driver = splitPreloadPerDriver;
 
-  configurationValues.insert(
-      {{"enable_parallel_load", conf->get<bool>(kVeloxParallelRead, kVeloxParallelReadDefault) ? "true" : "false"}});
+  auto parallelRead = conf->get<bool>(kVeloxParallelRead, kVeloxParallelReadDefault);
 
+  configurationValues.insert(
+      {{"enable_parallel_load", parallelRead ? "true" : "false"}});
+  
   FLAGS_wsVRLoad = conf->get<bool>(kVeloxVRlRead, kVeloxVRlReadDefault);
 
   auto properties = std::make_shared<const velox::core::MemConfig>(configurationValues);
 
-  if (ioThreads > 0) {
+  if (parallelRead) {
     // Use global memory pool for hive connector if SplitPreloadPerDriver was enabled. Otherwise, the allocated memory
     // blocks might cause unexpected behavior (e.g. crash) since the allocations were proceed in background IO threads.
     velox::connector::registerConnector(std::make_shared<MemoryPoolReplacedHiveConnector>(
