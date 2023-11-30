@@ -123,6 +123,9 @@ const std::string kVeloxShuffleReaderPrintFlag = "spark.gluten.velox.shuffleRead
 const std::string kVeloxFileHandleCacheEnabled = "spark.gluten.sql.columnar.backend.velox.fileHandleCacheEnabled";
 const bool kVeloxFileHandleCacheEnabledDefault = false;
 
+const std::string kVeloxPrefetchRowGroups = "spark.gluten.sql.columnar.backend.velox.prefetchRowGroups";
+
+
 } // namespace
 
 namespace gluten {
@@ -271,6 +274,8 @@ class MemoryPoolReplacedHiveConnector : public velox::connector::hive::HiveConne
         velox::connector::hive::HiveConfig::isFileColumnNamesReadAsLowerCase(connectorQueryCtx->config()));
     options.setUseColumnNamesForColumnMapping(
         velox::connector::hive::HiveConfig::isOrcUseColumnNames(connectorQueryCtx->config()));
+    options.setPrefetchRowGroups(
+        connectorQueryCtx->config()->get<uint32_t>(velox::connector::hive::HiveConfig::kPrefetchRowGroups, velox::dwio::common::ReaderOptions::kDefaultPrefetchRowGroups));
 
     return std::make_unique<velox::connector::hive::HiveDataSource>(
         outputType,
@@ -368,9 +373,11 @@ void VeloxBackend::initConnector(const facebook::velox::Config* conf) {
 
   auto parallelRead = conf->get<bool>(kVeloxParallelRead, kVeloxParallelReadDefault);
 
-  configurationValues.insert(
-      {{"enable_parallel_load", parallelRead ? "true" : "false"}});
-  
+  configurationValues.insert({
+      {velox::connector::hive::HiveConfig::kParallelLoadEnabled, parallelRead ? "true" : "false"},
+      {velox::connector::hive::HiveConfig::kPrefetchRowGroups, conf->get<long unsigned int>(kVeloxPrefetchRowGroups, velox::dwio::common::ReaderOptions::kDefaultPrefetchRowGroups)},
+      });
+
   FLAGS_wsVRLoad = conf->get<bool>(kVeloxVRlRead, kVeloxVRlReadDefault);
 
   auto properties = std::make_shared<const velox::core::MemConfig>(configurationValues);
