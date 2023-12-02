@@ -375,7 +375,7 @@ void VeloxBackend::initConnector(const facebook::velox::Config* conf) {
 
   configurationValues.insert({
       {velox::connector::hive::HiveConfig::kParallelLoadEnabled, parallelRead ? "true" : "false"},
-      {velox::connector::hive::HiveConfig::kPrefetchRowGroups, conf->get<long unsigned int>(kVeloxPrefetchRowGroups, velox::dwio::common::ReaderOptions::kDefaultPrefetchRowGroups)},
+      {velox::connector::hive::HiveConfig::kPrefetchRowGroups, std::to_string(conf->get<long unsigned int>(kVeloxPrefetchRowGroups, velox::dwio::common::ReaderOptions::kDefaultPrefetchRowGroups))},
       });
 
   FLAGS_wsVRLoad = conf->get<bool>(kVeloxVRlRead, kVeloxVRlReadDefault);
