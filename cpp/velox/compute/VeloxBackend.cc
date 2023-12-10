@@ -54,7 +54,8 @@ DECLARE_int32(split_preload_per_driver);
 DECLARE_bool(velox_exception_user_stacktrace_enabled);
 DECLARE_int32(velox_memory_num_shared_leaf_pools);
 DECLARE_bool(velox_memory_use_hugepages);
-DECLARE_bool(FLAGS_wsVRLoad);
+DECLARE_bool(wsVRLoad);
+DECLARE_int32(cache_prefetch_min_pct);
 
 using namespace facebook;
 
@@ -125,6 +126,11 @@ const bool kVeloxFileHandleCacheEnabledDefault = false;
 
 const std::string kVeloxPrefetchRowGroups = "spark.gluten.sql.columnar.backend.velox.prefetchRowGroups";
 
+const std::string kVeloxMaxCoalesceDistance = "spark.gluten.sql.columnar.backend.velox.maxCoalesceDistance";
+
+const std::string kVeloxLoadQuantum = "spark.gluten.sql.columnar.backend.velox.loadQuantum";
+
+const std::string kVeloxCoalesceBytes = "spark.gluten.sql.columnar.backend.velox.coalesceBytes";
 
 } // namespace
 
@@ -172,7 +178,7 @@ void VeloxBackend::init(const std::unordered_map<std::string, std::string>& conf
   initCache(veloxcfg);
   initConnector(veloxcfg);
 #ifdef GLUTEN_PRINT_DEBUG
-  printConf(veloxcfg);
+  std::cout << "xgbtck " << printConfig(veloxcfg->valuesCopy());
 #endif
   veloxmemcfg->setValue(
       velox::connector::hive::HiveConfig::kEnableFileHandleCache,
@@ -274,8 +280,19 @@ class MemoryPoolReplacedHiveConnector : public velox::connector::hive::HiveConne
         velox::connector::hive::HiveConfig::isFileColumnNamesReadAsLowerCase(connectorQueryCtx->config()));
     options.setUseColumnNamesForColumnMapping(
         velox::connector::hive::HiveConfig::isOrcUseColumnNames(connectorQueryCtx->config()));
-    options.setPrefetchRowGroups(
-        connectorQueryCtx->config()->get<uint32_t>(velox::connector::hive::HiveConfig::kPrefetchRowGroups, velox::dwio::common::ReaderOptions::kDefaultPrefetchRowGroups));
+
+    options.setPrefetchRowGroups(connectorProperties()->get<uint32_t>(
+        velox::connector::hive::HiveConfig::kPrefetchRowGroups,
+        velox::dwio::common::ReaderOptions::kDefaultPrefetchRowGroups));
+    options.setMaxCoalesceDistance(connectorProperties()->get<uint32_t>(
+        velox::connector::hive::HiveConfig::kMaxCoalesceDistance,
+        velox::dwio::common::ReaderOptions::kDefaultCoalesceDistance));            
+    options.setLoadQuantum(connectorProperties()->get<uint32_t>(
+        velox::connector::hive::HiveConfig::kLoadQuantum,
+        velox::dwio::common::ReaderOptions::kDefaultLoadQuantum));
+    options.setMaxCoalesceBytes(connectorProperties()->get<uint32_t>(
+        velox::connector::hive::HiveConfig::kCoalesceBytes,
+        velox::dwio::common::ReaderOptions::kDefaultCoalesceBytes));
 
     return std::make_unique<velox::connector::hive::HiveDataSource>(
         outputType,
@@ -376,11 +393,17 @@ void VeloxBackend::initConnector(const facebook::velox::Config* conf) {
   configurationValues.insert({
       {velox::connector::hive::HiveConfig::kParallelLoadEnabled, parallelRead ? "true" : "false"},
       {velox::connector::hive::HiveConfig::kPrefetchRowGroups, std::to_string(conf->get<long unsigned int>(kVeloxPrefetchRowGroups, velox::dwio::common::ReaderOptions::kDefaultPrefetchRowGroups))},
+      {velox::connector::hive::HiveConfig::kMaxCoalesceDistance, std::to_string(conf->get<long unsigned int>(kVeloxMaxCoalesceDistance, velox::dwio::common::ReaderOptions::kDefaultCoalesceDistance))},
+      {velox::connector::hive::HiveConfig::kLoadQuantum, std::to_string(conf->get<long unsigned int>(kVeloxLoadQuantum, velox::dwio::common::ReaderOptions::kDefaultLoadQuantum))},
+      {velox::connector::hive::HiveConfig::kCoalesceBytes, std::to_string(conf->get<long unsigned int>(kVeloxCoalesceBytes, velox::dwio::common::ReaderOptions::kDefaultCoalesceBytes))},
       });
-
+  
   FLAGS_wsVRLoad = conf->get<bool>(kVeloxVRlRead, kVeloxVRlReadDefault);
+  FLAGS_cache_prefetch_min_pct = 0;
 
   auto properties = std::make_shared<const velox::core::MemConfig>(configurationValues);
+
+  std::cout << "xgbtck " << printConfig(configurationValues);
 
   if (parallelRead) {
     // Use global memory pool for hive connector if SplitPreloadPerDriver was enabled. Otherwise, the allocated memory

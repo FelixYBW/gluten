@@ -6,12 +6,16 @@
 ####################################################################################################
 set -exu
 
+export CFLAGS=" -g "
+export CXXFLAGS=" -g "
+
+
 CURRENT_DIR=$(cd "$(dirname "$BASH_SOURCE")"; pwd)
 GLUTEN_DIR="$CURRENT_DIR/.."
-BUILD_TYPE=Release
-BUILD_TESTS=OFF
+BUILD_TYPE=RelWithDebInfo
+BUILD_TESTS=ON
 BUILD_EXAMPLES=OFF
-BUILD_BENCHMARKS=OFF
+BUILD_BENCHMARKS=ON
 BUILD_JEMALLOC=OFF
 BUILD_PROTOBUF=OFF
 ENABLE_QAT=OFF
@@ -21,9 +25,10 @@ ENABLE_GCS=OFF
 ENABLE_S3=ON
 ENABLE_HDFS=OFF
 ENABLE_EP_CACHE=ON
-SKIP_BUILD_EP=ON
+SKIP_BUILD_EP=OFF
 ARROW_ENABLE_CUSTOM_CODEC=OFF
 ENABLE_VCPKG=ON
+VELOX_ENABLE_ARROW=ON
 
 for arg in "$@"
 do
@@ -106,7 +111,7 @@ fi
 ##install velox
 if [ "$SKIP_BUILD_EP" != "ON" ]; then
     cd $GLUTEN_DIR/ep/build-velox/src
-    ./get_velox.sh --enable_hdfs=$ENABLE_HDFS --build_protobuf=$BUILD_PROTOBUF --enable_s3=$ENABLE_S3 --enable_gcs=$ENABLE_GCS
+    #./get_velox.sh --enable_hdfs=$ENABLE_HDFS --build_protobuf=$BUILD_PROTOBUF --enable_s3=$ENABLE_S3 --enable_gcs=$ENABLE_GCS
     ./build_velox.sh --enable_s3=$ENABLE_S3 --enable_gcs=$ENABLE_GCS --build_type=$BUILD_TYPE --enable_hdfs=$ENABLE_HDFS \
                    --enable_ep_cache=$ENABLE_EP_CACHE --build_tests=$BUILD_TESTS --build_benchmarks=$BUILD_BENCHMARKS
 fi

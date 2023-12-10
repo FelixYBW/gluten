@@ -234,6 +234,44 @@ int main(int argc, char** argv) {
 
   conf.insert({gluten::kSparkBatchSize, FLAGS_batch_size});
   conf.insert({kDebugModeEnabled, "true"});
+  conf.insert({"spark.gluten.memory.conservative.offHeap.size.in.bytes","3758096384"});
+
+  conf.insert({"spark.gluten.memory.conservative.task.offHeap.size.in.bytes","3758096384"});
+  conf.insert({"spark.gluten.memory.offHeap.size.in.bytes","7516192768"});
+  conf.insert({"spark.gluten.memory.task.offHeap.size.in.bytes","7516192768"});
+  conf.insert({"spark.gluten.saveDir","/home/binweiyang/benchmark/"});
+  conf.insert({"spark.gluten.sql.benchmark_task.stageId","1"});
+  conf.insert({"spark.gluten.sql.benchmark_task.taskId","1"});
+  conf.insert({"spark.gluten.sql.columnar.backend.lib","velox"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.IOThreads","4"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.SplitPreloadPerDriver","0"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.cacheEnabled","false"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.enableSystemExceptionStacktrace","true"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.enableUserExceptionStacktrace","true"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.glogSeverityLevel","0"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.loadQuantum","268435456"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.maxCoalesceDistance","268435456"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.memCacheSize","0"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.memoryCapRatio","0.75"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.parallelRead","false"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.prefetchRowGroups","1"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.spillMemoryThresholdRatio","0.6"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.ssdCacheSize","0"});
+  conf.insert({"spark.gluten.sql.columnar.backend.velox.vrload","false"});
+  conf.insert({"spark.gluten.sql.columnar.coalesce.batches","true"});
+  conf.insert({"spark.gluten.sql.columnar.forceshuffledhashjoin","True"});
+  conf.insert({"spark.gluten.sql.columnar.maxBatchSize","4096"});
+  conf.insert({"spark.gluten.sql.columnar.shuffle.codec","zstd"});
+  conf.insert({"spark.gluten.sql.columnar.shuffle.preferSpill","False"});
+  conf.insert({"spark.gluten.sql.debug","true"});
+  conf.insert({"spark.gluten.sql.native.writer.enabled","True"});
+  conf.insert({"spark.gluten.sql.session.timeZone.default","UTC"});
+  conf.insert({"spark.hadoop.fs.s3a.use.instance.credentials","true"});
+  conf.insert({"spark.sql.sources.outputCommitterClass","com.netflix.bdp.s3.S3DirectoryOutputCommitter"});
+  conf.insert({"spark.hadoop.fs.s3.impl","org.apache.hadoop.fs.s3a.S3AFileSystem"});
+  conf.insert({"spark.sql.files.maxPartitionBytes","2147483648"});
+
+
   initVeloxBackend(conf);
 
   try {

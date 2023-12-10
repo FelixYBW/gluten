@@ -103,12 +103,12 @@ function compile {
     fi
   fi
 
-  COMPILE_OPTION="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=OFF -DVELOX_BUILD_TEST_UTILS=OFF -DVELOX_ENABLE_DUCKDB=OFF -DVELOX_ENABLE_PARSE=OFF"
+  COMPILE_OPTION="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=OFF -DVELOX_BUILD_TEST_UTILS=OFF -DVELOX_ENABLE_DUCKDB=OFF -DVELOX_ENABLE_PARSE=OFF "
   if [ $ENABLE_BENCHMARK == "ON" ]; then
-    COMPILE_OPTION="$COMPILE_OPTION -DVELOX_BUILD_BENCHMARKS=ON"
+    COMPILE_OPTION="$COMPILE_OPTION -DVELOX_BUILD_BENCHMARKS=OFF "
   fi
   if [ $ENABLE_TESTS == "ON" ]; then
-    COMPILE_OPTION="$COMPILE_OPTION -DVELOX_BUILD_TESTING=ON "
+    COMPILE_OPTION="$COMPILE_OPTION -DVELOX_BUILD_TESTING=OFF "
   fi
   if [ $ENABLE_HDFS == "ON" ]; then
     COMPILE_OPTION="$COMPILE_OPTION -DVELOX_ENABLE_HDFS=ON"
@@ -172,6 +172,7 @@ function check_commit {
     fi
   else
     git clean -dffx :/
+    sudo cp ${CURRENT_DIR}/modify_arrow.patch ${VELOX_HOME}/third_party/
   fi
 
   if [ -f ${VELOX_HOME}/velox-commit.cache ]; then
@@ -265,7 +266,7 @@ fi
 echo "Target Velox commit: $TARGET_BUILD_COMMIT"
 
 check_commit
-apply_compilation_fixes $CURRENT_DIR $VELOX_HOME
+#apply_compilation_fixes $CURRENT_DIR $VELOX_HOME
 compile
 
 echo "Successfully built Velox from Source."
