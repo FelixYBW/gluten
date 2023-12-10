@@ -77,7 +77,7 @@ const std::string kProcessedSplits = "processedSplits";
 const std::string kSkippedStrides = "skippedStrides";
 const std::string kProcessedStrides = "processedStrides";
 const std::string kRemainingFilterTime = "totalRemainingFilterTime";
-const std::string kFetchWaitTime = "fetchWaitTime";
+const std::string kFetchWaitTime = "ioWaitNanos";
 
 // others
 const std::string kHiveDefaultPartition = "__HIVE_DEFAULT_PARTITION__";
