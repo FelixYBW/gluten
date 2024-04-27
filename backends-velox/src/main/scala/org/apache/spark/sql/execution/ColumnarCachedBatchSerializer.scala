@@ -275,6 +275,7 @@ class ColumnarCachedBatchSerializer extends CachedBatchSerializer with SQLConfHe
           .recycleIterator {
             jniWrapper.close(deserializerHandle)
           }
+          .protectInvocationFlow()
           .recyclePayload(_.close())
           .create()
     }

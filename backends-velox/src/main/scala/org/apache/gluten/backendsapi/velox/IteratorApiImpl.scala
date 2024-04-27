@@ -225,6 +225,7 @@ class IteratorApiImpl extends IteratorApi with Logging {
 
     Iterators
       .wrap(nativeResultIterator.asScala)
+      .protectInvocationFlow()
       .recycleIterator {
         updateNativeMetrics(nativeResultIterator.getMetrics)
         nativeResultIterator.close()
