@@ -66,6 +66,11 @@ std::shared_ptr<facebook::velox::core::MemConfigMutable> getHiveConfig(
   std::string iamRole = conf->get<std::string>("spark.hadoop.fs.s3a.iam.role", "");
   std::string iamRoleSessionName = conf->get<std::string>("spark.hadoop.fs.s3a.iam.role.session.name", "");
 
+  /*std::string maxConnections = conf->get<std::string>("fs.s3a.connection.maximum", "25");
+  std::string connectTimeout = conf->get<std::string>("spark.hadoop.fs.s3a.iam.role.session.name", "");
+  std::string iamRoleSessionName = conf->get<std::string>("spark.hadoop.fs.s3a.iam.role.session.name", "");
+*/
+
   std::string awsSdkLogLevel = conf->get<std::string>(kVeloxAwsSdkLogLevel, kVeloxAwsSdkLogLevelDefault);
 
   const char* envAwsAccessKey = std::getenv("AWS_ACCESS_KEY_ID");
@@ -100,6 +105,7 @@ std::shared_ptr<facebook::velox::core::MemConfigMutable> getHiveConfig(
   hiveConf->setValue(
       facebook::velox::connector::hive::HiveConfig::kS3PathStyleAccess, pathStyleAccess ? "true" : "false");
   hiveConf->setValue(facebook::velox::connector::hive::HiveConfig::kS3LogLevel, awsSdkLogLevel);
+  //hiveConf->setValue(facebook::velox::connector::hive::HiveConfig::kS3MaxConnections, maxConnections);
 #endif
 
 #ifdef ENABLE_GCS
