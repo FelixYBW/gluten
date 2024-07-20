@@ -66,13 +66,16 @@ class ListenableMemoryAllocator final : public MemoryAllocator {
   int64_t getBytes() const override;
 
   int64_t peakBytes() const override;
-
+  void insertAllocation(void* p, int64_t size);
+  void deleteAllocation(void* p, int64_t size);
  private:
   void updateUsage(int64_t size);
-  MemoryAllocator* delegated_;
-  AllocationListener* listener_;
-  uint64_t usedBytes_{0L};
-  uint64_t peakBytes_{0L};
+  MemoryAllocator* const delegated_;
+  AllocationListener* const listener_;
+  std::atomic_int64_t usedBytes_{0L};
+  std::atomic_int64_t peakBytes_{0L};
+  typedef std::pair<void*, int64_t> Allocation;
+  std::vector<Allocation> allocations_;
 };
 
 class StdMemoryAllocator final : public MemoryAllocator {

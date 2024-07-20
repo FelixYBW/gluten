@@ -18,8 +18,47 @@
 #include "MemoryAllocator.h"
 #include "HbwAllocator.h"
 #include "utils/macros.h"
+#include <execinfo.h>
+#include <iostream> 
 
 namespace gluten {
+
+
+void ListenableMemoryAllocator::insertAllocation(void* p, int64_t size)
+{
+  auto pos=std::find_if(allocations_.begin(), allocations_.end(), [](auto px){return px.first==nullptr;});
+  if(pos!=allocations_.end())
+  {
+    *pos=Allocation(p, size);
+  }
+  else
+  {
+    allocations_.push_back(Allocation(p, size));
+  }
+}
+
+static inline void backtrace_alloc() {
+  void* array[1024];
+  auto size = backtrace(array, 1024);
+  char** strings = backtrace_symbols(array, size);
+  for (size_t i = 0; i < size; ++i) {
+    LOG(ERROR) << strings[i];
+  }
+  free(strings);
+}
+
+
+void ListenableMemoryAllocator::deleteAllocation(void* p, int64_t size){
+  auto pos=std::find_if(allocations_.begin(), allocations_.end(), [p, size](auto px){return px.first==p && px.second==size;});
+  if(pos!=allocations_.end())
+  {
+    *pos=Allocation(nullptr, 0);
+  } else {
+    LOG(ERROR) << "xgbtck error: free failed p = " << p << " size = " << size << std::endl;
+    std::for_each(allocations_.begin(), allocations_.end(), [](auto px){LOG(ERROR) << px.first << " " << px.second;});
+    backtrace_alloc();
+  }
+}
 
 bool ListenableMemoryAllocator::allocate(int64_t size, void** out) {
   updateUsage(size);
@@ -27,6 +66,7 @@ bool ListenableMemoryAllocator::allocate(int64_t size, void** out) {
   if (!succeed) {
     updateUsage(-size);
   }
+  insertAllocation(*out, size);
   return succeed;
 }
 
@@ -36,6 +76,7 @@ bool ListenableMemoryAllocator::allocateZeroFilled(int64_t nmemb, int64_t size, 
   if (!succeed) {
     updateUsage(-size * nmemb);
   }
+  insertAllocation(*out, size);
   return succeed;
 }
 
@@ -45,16 +86,20 @@ bool ListenableMemoryAllocator::allocateAligned(uint64_t alignment, int64_t size
   if (!succeed) {
     updateUsage(-size);
   }
+  insertAllocation(*out, size);
   return succeed;
 }
 
 bool ListenableMemoryAllocator::reallocate(void* p, int64_t size, int64_t newSize, void** out) {
   int64_t diff = newSize - size;
+  deleteAllocation(p, size);
   updateUsage(diff);
+
   bool succeed = delegated_->reallocate(p, size, newSize, out);
   if (!succeed) {
     updateUsage(-diff);
   }
+  insertAllocation(*out, newSize);
   return succeed;
 }
 
@@ -65,15 +110,18 @@ bool ListenableMemoryAllocator::reallocateAligned(
     int64_t newSize,
     void** out) {
   int64_t diff = newSize - size;
+  deleteAllocation(p, size);
   updateUsage(diff);
   bool succeed = delegated_->reallocateAligned(p, alignment, size, newSize, out);
   if (!succeed) {
     updateUsage(-diff);
   }
+  insertAllocation(*out, newSize);  
   return succeed;
 }
 
 bool ListenableMemoryAllocator::free(void* p, int64_t size) {
+  deleteAllocation(p, size);
   updateUsage(-size);
   bool succeed = delegated_->free(p, size);
   if (!succeed) {
@@ -92,8 +140,8 @@ int64_t ListenableMemoryAllocator::peakBytes() const {
 
 void ListenableMemoryAllocator::updateUsage(int64_t size) {
   listener_->allocationChanged(size);
-  usedBytes_ += size;
-  peakBytes_ = std::max(peakBytes_, usedBytes_);
+  usedBytes_.fetch_add(size);
+  peakBytes_.store(std::max(peakBytes_.load(), usedBytes_.load()));
 }
 
 bool StdMemoryAllocator::allocate(int64_t size, void** out) {

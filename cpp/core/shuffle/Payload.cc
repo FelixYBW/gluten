@@ -156,8 +156,11 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> readCompressedBuffer(
 
   ScopedTimer timer(&decompressTime);
   ARROW_ASSIGN_OR_RAISE(auto output, arrow::AllocateResizableBuffer(uncompressedLength, pool));
+
+  auto compressed2 = std::move(compressed);
   RETURN_NOT_OK(codec->Decompress(
-      compressedLength, compressed->data(), uncompressedLength, const_cast<uint8_t*>(output->data())));
+      compressedLength, compressed2->data(), uncompressedLength, const_cast<uint8_t*>(output->data())));
+  
   return output;
 }
 

@@ -19,7 +19,12 @@
 
 #include <algorithm>
 #include <memory>
-
+#include <execinfo.h>
+#include <iostream> 
+#include <thread>
+#include <vector>
+#include <shared_mutex> 
+#include <mutex> 
 namespace gluten {
 
 extern bool backtrace_allocation;
@@ -45,6 +50,17 @@ class AllocationListener {
   AllocationListener() = default;
 };
 
+
+static inline void backtrace_lis() {
+  void* array[1024];
+  auto size = backtrace(array, 1024);
+  char** strings = backtrace_symbols(array, size);
+  for (size_t i = 0; i < size; ++i) {
+    std::cout << strings[i] << std::endl;
+  }
+  free(strings);
+}
+
 /// Memory changes will be round to specified block size which aim to decrease delegated listener calls.
 class BlockAllocationListener final : public AllocationListener {
  public:
@@ -52,22 +68,26 @@ class BlockAllocationListener final : public AllocationListener {
       : delegated_(delegated), blockSize_(blockSize) {}
 
   void allocationChanged(int64_t diff) override {
+
     if (diff == 0) {
       return;
     }
+    std::unique_lock guard{mutex_};
     if (diff > 0) {
       if (reservationBytes_ - usedBytes_ < diff) {
         auto roundSize = (diff + (blockSize_ - 1)) / blockSize_ * blockSize_;
-        delegated_->allocationChanged(roundSize);
         reservationBytes_ += roundSize;
         peakBytes_ = std::max(peakBytes_, reservationBytes_);
+        guard.unlock();
+        delegated_->allocationChanged(roundSize);
       }
       usedBytes_ += diff;
     } else {
       usedBytes_ += diff;
       auto unreservedSize = (reservationBytes_ - usedBytes_) / blockSize_ * blockSize_;
-      delegated_->allocationChanged(-unreservedSize);
       reservationBytes_ -= unreservedSize;
+      guard.unlock();
+      delegated_->allocationChanged(-unreservedSize);
     }
   }
 
@@ -80,11 +100,16 @@ class BlockAllocationListener final : public AllocationListener {
   }
 
  private:
-  AllocationListener* delegated_;
-  uint64_t blockSize_{0L};
+  AllocationListener* const delegated_;
+  const uint64_t blockSize_;
   uint64_t usedBytes_{0L};
   uint64_t peakBytes_{0L};
   uint64_t reservationBytes_{0L};
+
+  mutable std::mutex mutex_;
+
+  typedef std::pair<std::thread::id, std::string> ThreadInfo;
+  std::vector<ThreadInfo> thread_ids_;
 };
 
 } // namespace gluten
