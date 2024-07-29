@@ -113,28 +113,29 @@ object VeloxBackendSettings extends BackendSettingsApi {
       case ParquetReadFormat =>
         val typeValidator: PartialFunction[StructField, String] = {
           // Parquet scan of nested array with struct/array as element type is unsupported in Velox.
-          case StructField(_, arrayType: ArrayType, _, _)
-              if arrayType.elementType.isInstanceOf[StructType] =>
-            "StructType as element in ArrayType"
-          case StructField(_, arrayType: ArrayType, _, _)
-              if arrayType.elementType.isInstanceOf[ArrayType] =>
-            "ArrayType as element in ArrayType"
+          // case StructField(_, arrayType: ArrayType, _, _)
+          //    if arrayType.elementType.isInstanceOf[StructType] =>
+          //  "StructType as element in ArrayType"
+          // case StructField(_, arrayType: ArrayType, _, _)
+          //    if arrayType.elementType.isInstanceOf[ArrayType] =>
+          //  "ArrayType as element in ArrayType"
           // Parquet scan of nested map with struct as key type,
           // or array type as value type is not supported in Velox.
-          case StructField(_, mapType: MapType, _, _) if mapType.keyType.isInstanceOf[StructType] =>
-            "StructType as Key in MapType"
-          case StructField(_, mapType: MapType, _, _)
-              if mapType.valueType.isInstanceOf[ArrayType] =>
-            "ArrayType as Value in MapType"
+          // case StructField(_, mapType: MapType, _, _)
+          // if mapType.keyType.isInstanceOf[StructType] =>
+          //  "StructType as Key in MapType"
+          // case StructField(_, mapType: MapType, _, _)
+          //    if mapType.valueType.isInstanceOf[ArrayType] =>
+          //  "ArrayType as Value in MapType"
           case StructField(_, TimestampType, _, _)
               if GlutenConfig.getConf.forceParquetTimestampTypeScanFallbackEnabled =>
             "TimestampType"
         }
-        if (!GlutenConfig.getConf.forceComplexTypeScanFallbackEnabled) {
-          validateTypes(typeValidator)
-        } else {
-          validateTypes(parquetTypeValidatorWithComplexTypeFallback)
-        }
+        // if (!GlutenConfig.getConf.forceComplexTypeScanFallbackEnabled) {
+        validateTypes(typeValidator)
+      // } else {
+      //  validateTypes(parquetTypeValidatorWithComplexTypeFallback)
+      // }
       case DwrfReadFormat => ValidationResult.succeeded
       case OrcReadFormat =>
         if (!GlutenConfig.getConf.veloxOrcScanEnabled) {
