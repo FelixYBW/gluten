@@ -27,13 +27,22 @@ case class InsertTransitions(outputsColumnar: Boolean) extends Rule[SparkPlan] {
   private val convFunc = ConventionFunc.create()
 
   override def apply(plan: SparkPlan): SparkPlan = {
+
+    // scalastyle:off println
+    System.out.println("xgbtck before apply InsertTransitions: " + plan)
+
     // Remove all transitions at first.
     val removed = RemoveTransitions.apply(plan)
     val filled = fillWithTransitions(removed)
     if (!outputsColumnar) {
-      return Transitions.toRowPlan(filled)
+      val rstplan = Transitions.toRowPlan(filled)
+      System.out.println("xgbtck after apply torowplan: " + rstplan)
+      return rstplan
     }
-    Transitions.toBackendBatchPlan(filled)
+    val rstplan = Transitions.toBackendBatchPlan(filled)
+    System.out.println("xgbtck after apply torowplan: " + rstplan)
+    return rstplan
+    // scalastyle:on println
   }
 
   private def fillWithTransitions(plan: SparkPlan): SparkPlan = plan.transformUp {
