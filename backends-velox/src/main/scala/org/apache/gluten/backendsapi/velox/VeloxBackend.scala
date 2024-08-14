@@ -122,7 +122,8 @@ object VeloxBackendSettings extends BackendSettingsApi {
           //  "ArrayType as element in ArrayType"
           // Parquet scan of nested map with struct as key type,
           // or array type as value type is not supported in Velox.
-          // case StructField(_, mapType: MapType, _, _) if mapType.keyType.isInstanceOf[StructType] =>
+          // case StructField(_, mapType: MapType, _, _)
+          //   if mapType.keyType.isInstanceOf[StructType] =>
           //   "StructType as Key in MapType"
           // case StructField(_, mapType: MapType, _, _)
           //     if mapType.valueType.isInstanceOf[ArrayType] =>
