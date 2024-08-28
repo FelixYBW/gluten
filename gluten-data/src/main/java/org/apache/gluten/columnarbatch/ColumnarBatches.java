@@ -315,6 +315,14 @@ public class ColumnarBatches {
         .compose(handles);
   }
 
+  // If cb1ColumnIndices is different with cb1 columns, ignore the front column in cb1
+  public static ColumnarBatch composeWithReorder(
+      ColumnarBatch cb1, int[] cb1ColumnIndices, ColumnarBatch cb2) {
+    long handle = ColumnarBatchJniWrapper.create(Runtimes.contextInstance("ColumnarBatches#composeWithReorder"))
+        .composeWithReorder(getNativeHandle(cb1), cb1ColumnIndices, getNativeHandle(cb2));
+    return ColumnarBatches.create(handle);
+  }
+
   private static ColumnarBatch create(IndicatorVector iv) {
     int numColumns = Math.toIntExact(iv.getNumColumns());
     int numRows = Math.toIntExact(iv.getNumRows());

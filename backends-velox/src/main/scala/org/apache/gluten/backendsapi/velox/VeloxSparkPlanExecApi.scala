@@ -307,6 +307,14 @@ class VeloxSparkPlanExecApi extends SparkPlanExecApi {
     FilterExecTransformer(condition, child)
   }
 
+  override def genSparkPartialProjectColumnarExec(original: ProjectExec): GlutenPlan = {
+    SparkPartialProjectColumnarExec.create(original)
+  }
+
+  override def genProjectColumnarExec(original: ProjectExec): GlutenPlan = {
+    ProjectColumnarExec(original.projectList, original.child)
+  }
+
   /** Generate HashAggregateExecTransformer. */
   override def genHashAggregateExecTransformer(
       requiredChildDistributionExpressions: Option[Seq[Expression]],

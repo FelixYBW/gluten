@@ -63,6 +63,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Date;
@@ -718,6 +719,16 @@ public final class ArrowWritableColumnVector extends WritableColumnVectorShim {
     return accessor.getDecimal(rowId, precision, scale);
   }
 
+  public void putDecimal(int rowId, Decimal value, int precision) {
+    if (precision <= Decimal.MAX_INT_DIGITS()) {
+      putInt(rowId, (int) value.toUnscaledLong());
+    } else if (precision <= Decimal.MAX_LONG_DIGITS()) {
+      putLong(rowId, value.toUnscaledLong());
+    } else {
+      writer.setBytes(rowId, value.toJavaBigDecimal());
+    }
+  }
+
   @Override
   public UTF8String getUTF8String(int rowId) {
     if (isNullAt(rowId)) {
@@ -1255,9 +1266,8 @@ public final class ArrowWritableColumnVector extends WritableColumnVectorShim {
       throw new UnsupportedOperationException();
     }
 
-    void setNotNull(int rowId) {
-      throw new UnsupportedOperationException();
-    }
+    // No need to setNotNull then setValue, only setValue is enough
+    void setNotNull(int rowId) {}
 
     void setNulls(int rowId, int count) {
       throw new UnsupportedOperationException();

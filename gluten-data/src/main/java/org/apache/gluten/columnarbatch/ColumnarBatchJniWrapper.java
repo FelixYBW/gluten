@@ -44,6 +44,16 @@ public class ColumnarBatchJniWrapper implements RuntimeAware {
 
   public native long compose(long[] batches);
 
+  /**
+   * Reorder column to generate a new ColumnarBatch.
+   *
+   * @param cb1 column batch
+   * @param cb1ColumnIndices the index in result columnar batch
+   * @param cb2 column batch
+   * @return compose batch handle
+   */
+  public native long composeWithReorder(long cb1, int[] cb1ColumnIndices, long cb2);
+
   public native void exportToArrow(long batch, long cSchema, long cArray);
 
   public native long select(long batch, int[] columnIndices);

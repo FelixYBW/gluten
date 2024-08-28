@@ -118,6 +118,30 @@ std::shared_ptr<VeloxColumnarBatch> VeloxColumnarBatch::from(
     auto compositeVeloxVector = makeRowVector(childNames, childVectors, cb->numRows(), pool);
     return std::make_shared<VeloxColumnarBatch>(compositeVeloxVector);
   }
+  if (cb->getType() == "composite_reorder") {
+    // Initialize children as batch2 children, then insert specified columns in batch1
+    auto composite = std::dynamic_pointer_cast<gluten::CompositeReorderColumnarBatch>(cb);
+    auto vector1 = from(pool, composite->getBatch1())->getRowVector();
+    auto vector2 = from(pool, composite->getBatch2())->getRowVector();
+    auto& vector1Names = facebook::velox::asRowType(vector1->type())->names();
+    auto& vector2Names = facebook::velox::asRowType(vector2->type())->names();
+    std::vector<std::string> childNames;
+    std::vector<VectorPtr> childVectors;
+    childNames.reserve(composite->numColumns());
+    childVectors.reserve(composite->numColumns());
+    auto& batch1Indices = composite->getBatch1ColumnIndices();
+    for (int32_t i = 0, cb1Index = 0, cb2Index = 0; i < composite->numColumns(); i++) {
+      if (batch1Indices[cb1Index] == i) {
+        childNames.push_back(vector1Names[cb1Index]);
+        childVectors.push_back(vector1->childAt(cb1Index++));
+      } else {
+        childNames.push_back(vector2Names[cb2Index]);
+        childVectors.push_back(vector2->childAt(cb2Index++));
+      }
+    }
+    auto compositeVeloxVector = makeRowVector(std::move(childNames), std::move(childVectors), cb->numRows(), pool);
+    return std::make_shared<VeloxColumnarBatch>(compositeVeloxVector);
+  }
   auto vp = velox::importFromArrowAsOwner(*cb->exportArrowSchema(), *cb->exportArrowArray(), pool);
   return std::make_shared<VeloxColumnarBatch>(std::dynamic_pointer_cast<velox::RowVector>(vp));
 }
