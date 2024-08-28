@@ -17,6 +17,7 @@
 package org.apache.gluten.expression
 
 import org.apache.gluten.execution.{ProjectColumnarExec, WholeStageTransformerSuite}
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.optimizer.{ConstantFolding, NullPropagation}
 import org.apache.spark.sql.functions.udf
@@ -88,7 +89,8 @@ class ProjectColumnarSuite extends WholeStageTransformerSuite {
   }
 
   test("test plus_one with many columns in project") {
-    runQueryAndCompare("SELECT plus_one(cast(l_orderkey as long)), hash(l_partkey), l_partkey from lineitem") {
+    runQueryAndCompare(
+      "SELECT plus_one(cast(l_orderkey as long)), hash(l_partkey), l_partkey from lineitem") {
       checkGlutenOperatorMatch[ProjectColumnarExec]
     }
   }
@@ -146,4 +148,3 @@ class ProjectColumnarSuite extends WholeStageTransformerSuite {
   }
 
 }
-

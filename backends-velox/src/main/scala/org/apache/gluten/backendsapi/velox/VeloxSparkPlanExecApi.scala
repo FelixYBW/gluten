@@ -22,6 +22,7 @@ import org.apache.gluten.exception.GlutenNotSupportException
 import org.apache.gluten.execution._
 import org.apache.gluten.expression._
 import org.apache.gluten.expression.aggregate.{HLLAdapter, VeloxBloomFilterAggregate, VeloxCollectList, VeloxCollectSet}
+import org.apache.gluten.extension.GlutenPlan
 import org.apache.gluten.extension.columnar.FallbackTags
 import org.apache.gluten.extension.columnar.transition.Convention
 import org.apache.gluten.extension.columnar.transition.ConventionFunc.BatchOverride

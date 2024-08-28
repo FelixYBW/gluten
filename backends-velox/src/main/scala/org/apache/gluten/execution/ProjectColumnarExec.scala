@@ -23,15 +23,16 @@ import org.apache.gluten.memory.arrow.alloc.ArrowBufferAllocators
 import org.apache.gluten.sql.shims.SparkShimLoader
 import org.apache.gluten.utils.iterator.Iterators
 import org.apache.gluten.vectorized.ArrowWritableColumnVector
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, MutableProjection, NamedExpression, SortOrder, UnsafeProjection, UnsafeRow}
-import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.execution.{ExplainUtils, OrderPreservingNodeShim, PartitioningPreservingNodeShim, SparkPlan, UnaryExecNode}
+import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.execution.vectorized.{MutableColumnarRow, WritableColumnVector}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, NullType, ShortType, StringType, TimestampType, YearMonthIntervalType}
 import org.apache.spark.sql.utils.SparkSchemaUtil
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 
 case class ProjectColumnarExec(projectList: Seq[NamedExpression], child: SparkPlan)
   extends UnaryExecNode
@@ -49,7 +50,8 @@ case class ProjectColumnarExec(projectList: Seq[NamedExpression], child: SparkPl
       "time of Arrow ColumnarBatch to velox")
   )
 
-  private val (mutableProjectList, projectIndexInChild, projectIndexes) = removeAttributeReferenceFromProjectList()
+  private val (mutableProjectList, projectIndexInChild, projectIndexes) =
+    removeAttributeReferenceFromProjectList()
 
   private val mutableProjectOutput = mutableProjectList.map(_.toAttribute)
 
@@ -65,8 +67,6 @@ case class ProjectColumnarExec(projectList: Seq[NamedExpression], child: SparkPl
   override def output: Seq[Attribute] = projectList.map(_.toAttribute)
 
   override def supportsColumnar: Boolean = true
-
-
 
   // Only the mutable data type is valid
   private def validateDataType(dataType: DataType): Boolean = {
@@ -88,10 +88,15 @@ case class ProjectColumnarExec(projectList: Seq[NamedExpression], child: SparkPl
   // Return the expression in projectList to MutableProjection
   // Return the index in child output
   // Return the index in this operator output
-  private def removeAttributeReferenceFromProjectList(): (Seq[NamedExpression], Seq[Int], Seq[Int]) = {
+  private def removeAttributeReferenceFromProjectList()
+      : (Seq[NamedExpression], Seq[Int], Seq[Int]) = {
     val childOutput = child.output
-    val (attrs, notAttrs) = projectList.zipWithIndex.partition(e => e._1.isInstanceOf[AttributeReference])
-    (notAttrs.map(_._1), attrs.map( a => childOutput.indexWhere(a._1.exprId == _.exprId)), attrs.map(_._2))
+    val (attrs, notAttrs) =
+      projectList.zipWithIndex.partition(e => e._1.isInstanceOf[AttributeReference])
+    (
+      notAttrs.map(_._1),
+      attrs.map(a => childOutput.indexWhere(a._1.exprId == _.exprId)),
+      attrs.map(_._2))
   }
 
 //  override def doExecuteColumnar(): RDD[ColumnarBatch] = {
@@ -141,7 +146,8 @@ case class ProjectColumnarExec(projectList: Seq[NamedExpression], child: SparkPl
 //                ColumnarBatches.retain(veloxBatch)
 //                veloxBatch
 //              } else {
-//                val composeBatch = ColumnarBatches.composeWithReorder(selectedBatch, projectIndexes.toArray, veloxBatch)
+//                val composeBatch = ColumnarBatches.composeWithReorder(
+//                selectedBatch, projectIndexes.toArray, veloxBatch)
 //                veloxBatch.close()
 //                composeBatch
 //              }
@@ -180,27 +186,28 @@ case class ProjectColumnarExec(projectList: Seq[NamedExpression], child: SparkPl
               val start = System.currentTimeMillis()
               val proj = UnsafeProjection.create(mutableProjectList, childOutput)
               val c2rStart = System.currentTimeMillis()
-              val rows = VeloxColumnarToRowExec.toRowIterator(Iterator.single(batch), childOutput).map(proj)
+              val rows =
+                VeloxColumnarToRowExec.toRowIterator(Iterator.single(batch), childOutput).map(proj)
               c2rTime += System.currentTimeMillis() - c2rStart
               val selectedBatch = ColumnarBatches.select(batch, projectIndexInChild.toArray)
               val schema =
                 SparkShimLoader.getSparkShims.structFromAttributes(mutableProjectOutput)
-              val iter = RowToVeloxColumnarExec.toColumnarBatchIterator(
-                rows,
-                schema,
-                batch.numRows()).map {
-                b => if (selectedBatch.numCols() == 0) {
-                  ColumnarBatches.retain(b)
-                  selectedBatch.close()
-                  b
-                } else {
-                  print("project batch" + ColumnarBatches.toString(b, 0, 20))
-                  val composeBatch = ColumnarBatches.composeWithReorder(selectedBatch, projectIndexes.toArray, b)
-                  b.close()
-                  selectedBatch.close()
-                  composeBatch
+              val iter =
+                RowToVeloxColumnarExec.toColumnarBatchIterator(rows, schema, batch.numRows()).map {
+                  b =>
+                    if (selectedBatch.numCols() == 0) {
+                      ColumnarBatches.retain(b)
+                      selectedBatch.close()
+                      b
+                    } else {
+                      print("project batch" + ColumnarBatches.toString(b, 0, 20))
+                      val composeBatch =
+                        ColumnarBatches.composeWithReorder(selectedBatch, projectIndexes.toArray, b)
+                      b.close()
+                      selectedBatch.close()
+                      composeBatch
+                    }
                 }
-              }
               timeMetric += System.currentTimeMillis() - start
               iter
             }

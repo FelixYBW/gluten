@@ -280,9 +280,7 @@ case class SparkPartialProjectColumnarExec(original: ProjectExec, child: SparkPl
     val numRows = childData.numRows()
     val start = System.currentTimeMillis()
     val arrowBatch =
-      ColumnarBatches.ensureLoaded(
-        ArrowBufferAllocators.contextInstance(),
-        childData)
+      ColumnarBatches.ensureLoaded(ArrowBufferAllocators.contextInstance(), childData)
     c2r += System.currentTimeMillis() - start
 
     val schema =
