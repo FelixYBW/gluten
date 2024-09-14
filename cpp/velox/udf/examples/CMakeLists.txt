@@ -19,5 +19,11 @@ target_link_libraries(myudf velox)
 add_library(myudaf SHARED "MyUDAF.cc")
 target_link_libraries(myudaf velox)
 
+add_library(LinkedIdUDF SHARED "LinkedIdUDF.cc")
+target_link_libraries(LinkedIdUDF velox)
+
+add_library(ListVectorSimilarityUDF SHARED "ListVectorSimilarityUDF.cc")
+target_link_libraries(ListVectorSimilarityUDF velox)
+
 add_executable(test_myudf "TestMyUDF.cc")
 target_link_libraries(test_myudf velox)
