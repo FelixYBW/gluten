@@ -19,6 +19,7 @@
 
 #include <glog/logging.h>
 #include <jni/JniCommon.h>
+#include <execinfo.h>
 
 #include <exception>
 #include "JniUdf.h"
@@ -36,12 +37,112 @@
 #include "velox/common/file/FileSystems.h"
 
 #include <iostream>
+/* Prototypes for __malloc_hook, __free_hook */
+#include <malloc.h>
 
 using namespace facebook;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void *(*old_malloc_hook)(size_t __size, const void *);
+void *(*old_realloc_hook) (void *ptr, size_t size, const void *caller);
+void *(*old_memalign_hook) (size_t alignment, size_t size, const void *caller);
+
+/* Prototypes for our hooks.  */
+static void *my_malloc_hook (size_t, const void *);
+static void *my_realloc_hook (void *ptr, size_t size, const void *caller);
+static void *my_memalign_hook (size_t alignment, size_t size, const void *caller);
+
+static void
+my_init (void)
+{
+  old_malloc_hook = __malloc_hook;
+  old_realloc_hook = __realloc_hook;
+  old_memalign_hook = __memalign_hook;
+
+  __malloc_hook = my_malloc_hook;
+  __realloc_hook = my_realloc_hook;
+  __memalign_hook = my_memalign_hook;
+}
+
+static inline void backtrace_x(size_t alloc_size) {
+  void* array[1024];
+  auto size = backtrace(array, 1024);
+  char** strings = backtrace_symbols(array, size);
+  size_t i=0;
+  for (; i < size; ++i) {
+    if (strstr(strings[i], "MemoryAllocator") != NULL) {
+      break; 
+    }
+  }
+  if (i == size)
+  {
+    printf("allocate %lu\n", alloc_size);
+    for (i=0; i < size; ++i) {
+      printf("%s\n", strings[i]);
+    }
+  }
+  free(strings);
+}
+
+static void *
+my_malloc_hook (size_t size, const void *caller)
+{
+  void *result;
+  /* Restore all old hooks */
+  __malloc_hook = old_malloc_hook;
+
+  /* Call recursively */
+  result = malloc (size);
+  /* Save underlying hooks */
+  if (size >=1024*1024)
+  {
+    backtrace_x(size);
+  }
+  /* Restore our own hooks */
+  __malloc_hook = my_malloc_hook;
+  return result;
+}
+
+static void *
+my_realloc_hook (void *ptr, size_t size, const void *caller)
+{
+  void *result;
+  /* Restore all old hooks */
+  __realloc_hook = old_realloc_hook;
+
+  /* Call recursively */
+  result = realloc (ptr, size);
+  /* Save underlying hooks */
+  if (size >=1024*1024)
+  {
+    backtrace_x(size);
+  }
+  /* Restore our own hooks */
+  __realloc_hook = my_realloc_hook;
+  return result;
+}
+
+static void *
+my_memalign_hook (size_t alignment, size_t size, const void *caller)
+{
+  void *result;
+  /* Restore all old hooks */
+  __memalign_hook = old_memalign_hook;
+
+  /* Call recursively */
+  result = aligned_alloc (alignment, size);
+  /* Save underlying hooks */
+  if (size >=1024*1024)
+  {
+    backtrace_x(size);
+  }
+  /* Restore our own hooks */
+  __memalign_hook = my_memalign_hook;
+  return result;
+}
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
   JNIEnv* env;
@@ -55,6 +156,8 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
   gluten::initVeloxJniUDF(env);
 
   DLOG(INFO) << "Loaded Velox backend.";
+
+  my_init ();
 
   return jniVersion;
 }
