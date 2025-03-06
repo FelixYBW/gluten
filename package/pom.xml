@@ -132,7 +132,7 @@
             <configuration>
               <createSourcesJar>true</createSourcesJar>
               <relocations>
-                <relocation>
+              <relocation>
                   <pattern>com.google.protobuf</pattern>
                   <shadedPattern>${gluten.shade.packageName}.com.google.protobuf</shadedPattern>
                 </relocation>
@@ -287,6 +287,7 @@
                     <ignoreClass>org.apache.spark.unused.UnusedStubClass</ignoreClass>
                     <!-- jdo -->
                     <ignoreClass>javax.jdo.*</ignoreClass>
+                    <ignoreClass>javax.servlet.*</ignoreClass>
                     <!-- javax -->
                     <ignoreClass>javax.transaction.*</ignoreClass>
                     <ignoreClass>javax.xml.*</ignoreClass>
@@ -352,8 +353,6 @@
                     <ignoreClass>org.apache.spark.util.collection.unsafe.sort.UnsafeExternalSorter$ChainedIterator</ignoreClass>
                     <ignoreClass>org.apache.spark.memory.MemoryConsumer</ignoreClass>
                     <ignoreClass>org.apache.spark.memory.TaskMemoryManager </ignoreClass>
-                    <!-- protobuf -->
-                    <ignoreClass>com.google.protobuf.*</ignoreClass>
                   </ignoreClasses>
                   <scopes>
                     <scope>compile</scope>

@@ -133,7 +133,7 @@
     <outputDirectory>target/scala-${scala.binary.version}/classes</outputDirectory>
     <testOutputDirectory>target/scala-${scala.binary.version}/test-classes</testOutputDirectory>
     <plugins>
-      <!-- compile proto buffer files using copied protoc binary -->
+       <!-- compile proto buffer files using copied protoc binary -->
       <plugin>
         <groupId>org.xolstice.maven.plugins</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>
@@ -155,7 +155,7 @@
           </execution>
         </executions>
       </plugin>
-      <plugin>
+     <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-resources-plugin</artifactId>
       </plugin>
