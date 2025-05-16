@@ -197,6 +197,13 @@ function install_duckdb {
   fi
 }
 
+function install_geos {
+  if [[ "$BUILD_GEOS" == "true" ]]; then
+    wget_and_untar https://github.com/libgeos/geos/archive/${GEOS_VERSION}.tar.gz geos
+    cmake_install_dir geos -DBUILD_TESTING=OFF
+  fi
+}
+
 function install_prerequisites {
   run_and_time install_lzo
   run_and_time install_boost
@@ -216,6 +223,7 @@ function install_velox_deps {
   run_and_time install_gtest
   run_and_time install_conda
   run_and_time install_duckdb
+  run_and_time install_geos
 }
 
 $SUDO dnf makecache

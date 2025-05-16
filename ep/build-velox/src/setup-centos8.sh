@@ -176,6 +176,13 @@ function install_cuda {
   yum install -y cuda-nvcc-$(echo $1 | tr '.' '-') cuda-cudart-devel-$(echo $1 | tr '.' '-')
 }
 
+function install_geos {
+  if [[ "$BUILD_GEOS" == "true" ]]; then
+    wget_and_untar https://github.com/libgeos/geos/archive/${GEOS_VERSION}.tar.gz geos
+    cmake_install_dir geos -DBUILD_TESTING=OFF
+  fi
+}
+
 function install_velox_deps {
   run_and_time install_velox_deps_from_dnf
   run_and_time install_conda
@@ -193,6 +200,7 @@ function install_velox_deps {
   run_and_time install_fbthrift
   run_and_time install_openssl
   run_and_time install_duckdb
+  run_and_time install_geos
 }
 
 (return 2> /dev/null) && return # If script was sourced, don't run commands.
