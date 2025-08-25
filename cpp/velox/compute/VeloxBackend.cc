@@ -36,6 +36,7 @@
 
 #include "compute/VeloxRuntime.h"
 #include "config/VeloxConfig.h"
+#include "jni/DasAbfsSasTokenProvider.h"
 #include "jni/JniFileSystem.h"
 #include "memory/GlutenBufferedInputBuilder.h"
 #include "operators/functions/SparkExprToSubfieldFilterParser.h"
@@ -167,6 +168,9 @@ void VeloxBackend::init(
 #ifdef ENABLE_ABFS
   velox::filesystems::registerAbfsFileSystem();
   velox::filesystems::registerAzureClientProvider(*hiveConf);
+#ifdef ENABLE_DAS
+  DasAbfsSasTokenProvider::registerProvider(*hiveConf);
+#endif
 #endif
 
 #ifdef GLUTEN_ENABLE_GPU
@@ -352,6 +356,9 @@ void VeloxBackend::initConnector(const std::shared_ptr<velox::config::ConfigBase
   auto newConf = createHiveConnectorConfig(backendConf_);
   LOG(INFO) << "merged config" << printConfig(backendConf_->rawConfigsCopy());
   velox::filesystems::registerAzureClientProvider(*newConf);
+#ifdef ENABLE_DAS
+  DasAbfsSasTokenProvider::registerProvider(*newConf);
+#endif
 
   auto ioThreads = backendConf_->get<int32_t>(kVeloxIOThreads, kVeloxIOThreadsDefault);
   GLUTEN_CHECK(
