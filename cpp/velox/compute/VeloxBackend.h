@@ -63,6 +63,12 @@ class VeloxBackend {
 
   void tearDown();
 
+  void initConnector(const std::shared_ptr<facebook::velox::config::ConfigBase>& hiveConf);
+  std::once_flag regFlag;
+  std::mutex registerMutex;
+  std::string azureAccount;
+  std::string_view kAbfsPrefix = "fs.azure.";
+
  private:
   explicit VeloxBackend(
       std::unique_ptr<AllocationListener> listener,
@@ -72,7 +78,6 @@ class VeloxBackend {
 
   void init(std::unique_ptr<AllocationListener> listener, const std::unordered_map<std::string, std::string>& conf);
   void initCache();
-  void initConnector(const std::shared_ptr<facebook::velox::config::ConfigBase>& hiveConf);
   void initUdf();
   std::unique_ptr<facebook::velox::cache::SsdCache> initSsdCache(uint64_t ssdSize);
 
@@ -97,6 +102,7 @@ class VeloxBackend {
   std::string cacheFilePrefix_;
 
   std::shared_ptr<facebook::velox::config::ConfigBase> backendConf_;
+
 };
 
 } // namespace gluten
