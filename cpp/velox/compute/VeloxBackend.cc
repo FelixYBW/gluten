@@ -306,6 +306,31 @@ void VeloxBackend::initCache() {
   }
 }
 
+std::string VeloxBackend::getValueStreamConnectorId(const std::string& azureAccount) {
+  // Use account specific connector ID for Azure, generic for others
+  if (!azureAccount.empty()) {
+    return std::string(kIteratorConnectorId) + "-" + azureAccount;
+  }
+  return std::string(kIteratorConnectorId);
+}
+
+void VeloxBackend::ensureConnectorInitialized(const std::shared_ptr<velox::config::ConfigBase>& hiveConf) {
+  std::lock_guard<std::mutex> lock(registerMutex);
+  
+  // Determine the connector ID to use
+  std::string connectorId = getValueStreamConnectorId(azureAccount);
+  
+  // Check if this specific connector is already registered
+  if (registeredConnectors_.find(connectorId) != registeredConnectors_.end()) {
+    LOG(INFO) << "Connector '" << connectorId << "' already initialized, skipping";
+    return;
+  }
+  
+  LOG(INFO) << "Initializing connector '" << connectorId << "'";
+  velox::connector::registerConnector(std::make_shared<ValueStreamConnector>(connectorId, hiveConf));
+  registeredConnectors_.insert(connectorId);
+}
+
 void VeloxBackend::initConnector(const std::shared_ptr<velox::config::ConfigBase>& hiveConf) {
   // always update to use new session level conf
   for (const auto& [key, value] : hiveConf->rawConfigs()) {
@@ -339,8 +364,9 @@ void VeloxBackend::initConnector(const std::shared_ptr<velox::config::ConfigBase
       kHiveConnectorId, newConf, ioExecutor_.get());
   velox::connector::unregisterConnector(kHiveConnectorId);
   velox::connector::registerConnector(hiveConnector);
-  // Register value-stream connector for runtime iterator-based inputs
-  velox::connector::registerConnector(std::make_shared<ValueStreamConnector>(kIteratorConnectorId, hiveConf));
+  
+  // Register value-stream connector
+  ensureConnectorInitialized(hiveConf);
   
 #ifdef GLUTEN_ENABLE_GPU
   if (backendConf_->get<bool>(kCudfEnableTableScan, kCudfEnableTableScanDefault) &&

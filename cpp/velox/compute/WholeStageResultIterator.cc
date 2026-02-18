@@ -102,7 +102,7 @@ WholeStageResultIterator::WholeStageResultIterator(
     throw std::runtime_error("Invalid scan information.");
   }
   {
-    // parse uri to extract azure account
+    // Parse URI to extract azure account and set it before connector initialization
     if (scanInfos.size() > 0) {
       const auto& paths = scanInfos[0]->paths;
       if (paths.size() > 0) {
@@ -115,11 +115,8 @@ WholeStageResultIterator::WholeStageResultIterator(
           const std::string azureAccount = uri.substr(begin + 1, end - begin - 1);
           if (!azureAccount.empty()) {
             std::lock_guard<std::mutex> l(gluten::VeloxBackend::get()->registerMutex);
-            if (gluten::VeloxBackend::get()->azureAccount != azureAccount) {
-              gluten::VeloxBackend::get()->azureAccount = azureAccount;
-              gluten::VeloxBackend::get()->initConnector(
-                  std::make_shared<facebook::velox::config::ConfigBase>(veloxCfg_->rawConfigsCopy()));
-            }
+            // Set the azure account before calling initConnector
+            gluten::VeloxBackend::get()->azureAccount = azureAccount;
           }
         }
       }
@@ -389,13 +386,17 @@ void WholeStageResultIterator::constructPartitionColumns(
 
 void WholeStageResultIterator::addIteratorSplits(const std::vector<std::shared_ptr<ResultIterator>>& inputIterators) {
   GLUTEN_CHECK(!allSplitsAdded_, "Method addIteratorSplits should not be called since all splits has been added to the Velox task.");
+  // Get the appropriate connector ID (account specific for Azure, generic otherwise)
+  std::string connectorId = gluten::VeloxBackend::get()->getValueStreamConnectorId(
+      gluten::VeloxBackend::get()->azureAccount);
+  
   // Create IteratorConnectorSplit for each iterator
   for (size_t i = 0; i < streamIds_.size() && i < inputIterators.size(); ++i) {
     if (inputIterators[i] == nullptr) {
       continue;
     }
     auto connectorSplit = std::make_shared<IteratorConnectorSplit>(
-        kIteratorConnectorId, inputIterators[i]);
+        connectorId, inputIterators[i]);
     exec::Split split(folly::copy(connectorSplit), -1);
     task_->addSplit(streamIds_[i], std::move(split));
   }

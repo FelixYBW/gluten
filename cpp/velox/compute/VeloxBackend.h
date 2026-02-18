@@ -64,8 +64,12 @@ class VeloxBackend {
   void tearDown();
 
   void initConnector(const std::shared_ptr<facebook::velox::config::ConfigBase>& hiveConf);
+  void ensureConnectorInitialized(const std::shared_ptr<facebook::velox::config::ConfigBase>& hiveConf);
+  std::string getValueStreamConnectorId(const std::string& azureAccount = "");
+  
   std::once_flag regFlag;
   std::mutex registerMutex;
+  std::unordered_set<std::string> registeredConnectors_;
   std::string azureAccount;
   std::string_view kAbfsPrefix = "fs.azure.";
 
