@@ -244,6 +244,7 @@
                     <!-- javax -->
                     <ignoreClass>javax.servlet.*</ignoreClass>
                     <ignoreClass>javax.transaction.*</ignoreClass>
+                    <ignoreClass>javax.annotation.*</ignoreClass>
                     <ignoreClass>javax.xml.*</ignoreClass>
                     <!-- log4j -->
                     <ignoreClass>org.apache.commons.logging.*</ignoreClass>
