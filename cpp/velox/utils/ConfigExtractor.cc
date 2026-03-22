@@ -66,6 +66,7 @@ void getS3HiveConfig(
       {S3Config::Keys::kMaxConnections, std::make_pair("connection.maximum", "15")},
       {S3Config::Keys::kSocketTimeout, std::make_pair("connection.timeout", "200s")},
       {S3Config::Keys::kConnectTimeout, std::make_pair("connection.establish.timeout", "30s")},
+      {S3Config::Keys::kExecutorPoolSize, std::make_pair("executor.capacity", "0")},
       {S3Config::Keys::kUseInstanceCredentials, std::make_pair("instance.credentials", "false")},
       {S3Config::Keys::kIamRole, std::make_pair("iam.role", std::nullopt)},
       {S3Config::Keys::kIamRoleSessionName, std::make_pair("iam.role.session.name", "gluten-session")},
@@ -126,6 +127,7 @@ void getS3HiveConfig(
   setConfigIfPresent(S3Config::Keys::kConnectTimeout);
   setConfigIfPresent(S3Config::Keys::kEndpointRegion);
   setConfigIfPresent(S3Config::Keys::kIMDSEnabled);
+  setConfigIfPresent(S3Config::Keys::kExecutorPoolSize);
 
   hiveConfMap[S3Config::kS3LogLevel] = conf->get<std::string>(kVeloxAwsSdkLogLevel, kVeloxAwsSdkLogLevelDefault);
   hiveConfMap[S3Config::baseConfigKey(S3Config::Keys::kUseProxyFromEnv)] =
