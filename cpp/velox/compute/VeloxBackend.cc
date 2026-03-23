@@ -366,7 +366,7 @@ void VeloxBackend::initConnector(const std::shared_ptr<velox::config::ConfigBase
       ioThreads >= 0,
       kVeloxIOThreads + " was set to negative number " + std::to_string(ioThreads) + ", this should not happen.");
   if (ioThreads > 0) {
-    cpuExecutor_ = std::make_unique<folly::CPUThreadPoolExecutor>(ioThreads);
+    ioExecutor_ = std::make_unique<folly::CPUThreadPoolExecutor>(ioThreads);
   }
   auto hiveConnector = std::make_shared<velox::connector::hive::HiveConnector>(
       kHiveConnectorId, newConf, ioExecutor_.get());
