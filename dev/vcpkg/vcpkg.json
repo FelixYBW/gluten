@@ -63,6 +63,7 @@
             "identity-management",
             "s3",
             "sts",
+	    "s3-crt",
             "cognito-identity"
           ]
         }

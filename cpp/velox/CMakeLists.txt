@@ -114,7 +114,7 @@ macro(find_re2)
 endmacro()
 
 macro(find_awssdk)
-  find_package(AWSSDK REQUIRED COMPONENTS s3;identity-management)
+  find_package(AWSSDK REQUIRED COMPONENTS s3 s3-crt;identity-management)
 endmacro()
 
 macro(find_gcssdk)
@@ -396,7 +396,7 @@ endif()
 if(ENABLE_S3)
   add_definitions(-DENABLE_S3)
   find_awssdk()
-  target_link_libraries(velox PUBLIC ${AWSSDK_LIBRARIES})
+  target_link_libraries(velox PUBLIC ${AWSSDK_LIBRARIES} aws-cpp-sdk-s3-crt)
 endif()
 
 if(ENABLE_GCS)
