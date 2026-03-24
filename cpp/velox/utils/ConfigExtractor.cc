@@ -82,6 +82,9 @@ void getS3HiveConfig(
       {S3Config::Keys::kMaxAttempts, std::make_pair("retry.limit", std::nullopt)},
       {S3Config::Keys::kRetryMode, std::make_pair("retry.mode", "legacy")},
       {S3Config::Keys::kMaxConnections, std::make_pair("connection.maximum", "15")},
+      {S3Config::Keys::kPartSize, std::make_pair("part.size", "8388608")},
+      {S3Config::Keys::kThroughputTargetGbps, std::make_pair("throughput.target.gbps", "5")},
+      {S3Config::Keys::kEnableTcpKeepAlive, std::make_pair("connection.keepalive", "true")},
       {S3Config::Keys::kSocketTimeout, std::make_pair("connection.timeout", "200s")},
       {S3Config::Keys::kConnectTimeout, std::make_pair("connection.establish.timeout", "30s")},
       {S3Config::Keys::kUseInstanceCredentials, std::make_pair("instance.credentials", "false")},
@@ -140,6 +143,9 @@ void getS3HiveConfig(
   setConfigIfPresent(S3Config::Keys::kSSLEnabled);
   setConfigIfPresent(S3Config::Keys::kPathStyleAccess);
   setConfigIfPresent(S3Config::Keys::kMaxConnections);
+  setConfigIfPresent(S3Config::Keys::kPartSize);
+  setConfigIfPresent(S3Config::Keys::kThroughputTargetGbps);
+  setConfigIfPresent(S3Config::Keys::kEnableTcpKeepAlive);
   setConfigIfPresent(S3Config::Keys::kSocketTimeout);
   setConfigIfPresent(S3Config::Keys::kConnectTimeout);
   setConfigIfPresent(S3Config::Keys::kEndpointRegion);
