@@ -22,9 +22,10 @@
 ####################################################################################################
 set -exu
 
+
 CURRENT_DIR=$(cd "$(dirname "$BASH_SOURCE")"; pwd)
 GLUTEN_DIR="$CURRENT_DIR/.."
-BUILD_TYPE=Release
+BUILD_TYPE=relwithdebinfo
 BUILD_TESTS=OFF
 BUILD_EXAMPLES=OFF
 BUILD_BENCHMARKS=OFF
