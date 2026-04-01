@@ -364,11 +364,21 @@ void VeloxBackend::initConnector(const std::shared_ptr<velox::config::ConfigBase
   GLUTEN_CHECK(
       ioThreads >= 0,
       kVeloxIOThreads + " was set to negative number " + std::to_string(ioThreads) + ", this should not happen.");
+  // 1. Initialize the base thread pool
   if (ioThreads > 0) {
-    ioExecutor_ = std::make_unique<folly::CPUThreadPoolExecutor>(ioThreads);
+      ioExecutor_ = std::make_shared<folly::CPUThreadPoolExecutor>(ioThreads);
+  } else {
+      // Fallback if ioThreads is 0, perhaps to an InlineExecutor 
+      // because SerialExecutor cannot wrap a nullptr.
+      ioExecutor_ = std::make_shared<folly::InlineExecutor>();
   }
+  // 2. Create the SerialExecutor 
+  // .get() provides the raw pointer, and we wrap it in a shared_ptr 
+  // to ensure it stays alive as long as the connector needs it.
+  serialExecutor_ = folly::SerialExecutor::create(folly::getKeepAliveToken(ioExecutor_.get()));
+
   auto hiveConnector = std::make_shared<velox::connector::hive::HiveConnector>(
-      kHiveConnectorId, newConf, ioExecutor_.get());
+      kHiveConnectorId, newConf, serialExecutor_.get());
   velox::connector::unregisterConnector(kHiveConnectorId);
   velox::connector::registerConnector(hiveConnector);
   

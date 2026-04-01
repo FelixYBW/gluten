@@ -22,6 +22,8 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <folly/executors/IOThreadPoolExecutor.h>
+#include <folly/executors/CPUThreadPoolExecutor.h>
+#include <folly/executors/SerialExecutor.h>
 #include <filesystem>
 
 #include "velox/common/caching/AsyncDataCache.h"
@@ -99,7 +101,9 @@ class VeloxBackend {
   std::shared_ptr<facebook::velox::cache::AsyncDataCache> asyncDataCache_;
 
   std::unique_ptr<folly::IOThreadPoolExecutor> ssdCacheExecutor_;
-  std::unique_ptr<folly::CPUThreadPoolExecutor> ioExecutor_;
+  std::shared_ptr<folly::Executor> ioExecutor_;
+  folly::Executor::KeepAlive<folly::SerialExecutor> serialExecutor_;
+
   std::shared_ptr<facebook::velox::memory::MmapAllocator> cacheAllocator_;
 
   std::string cachePathPrefix_;
