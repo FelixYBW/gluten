@@ -18,7 +18,8 @@
 
 #include "VeloxBackend.h"
 
-#include <folly/executors/IOThreadPoolExecutor.h>
+#include <folly/executors/CPUThreadPoolExecutor.h>
+#include <folly/executors/task_queue/UnboundedBlockingQueue.h>
 
 #include "operators/functions/RegistrationAllFunctions.h"
 #include "operators/plannodes/RowVectorStream.h"
@@ -365,7 +366,9 @@ void VeloxBackend::initConnector(const std::shared_ptr<velox::config::ConfigBase
       ioThreads >= 0,
       kVeloxIOThreads + " was set to negative number " + std::to_string(ioThreads) + ", this should not happen.");
   if (ioThreads > 0) {
-    ioExecutor_ = std::make_unique<folly::CPUThreadPoolExecutor>(ioThreads);
+    ioExecutor_ = std::make_unique<folly::CPUThreadPoolExecutor>(
+      ioThreads,
+      std::make_unique<folly::UnboundedBlockingQueue<folly::CPUThreadPoolExecutor::CPUTask>>());
   }
   auto hiveConnector = std::make_shared<velox::connector::hive::HiveConnector>(
       kHiveConnectorId, newConf, ioExecutor_.get());
