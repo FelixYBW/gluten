@@ -161,14 +161,14 @@ The "Gluten Support" column is now ready to be populated with:
 | Spark option | Default | Description | Gluten Support |
 | --- | --- | --- | --- |
 | write-format | Table write.format.default | File format to use for this write operation; parquet, avro, or orc |⚠️ Parquet only|
-| target-file-size-bytes | As per table property | Overrides this table's write.target-file-size-bytes | |
+| target-file-size-bytes | As per table property | Overrides this table's write.target-file-size-bytes | ✅ |
 | check-nullability | true | Sets the nullable check on fields | |
 | snapshot-property.custom-key | null | Adds an entry with custom-key and corresponding value in the snapshot summary (the snapshot-property. prefix is only required for DSv2) | |
 | fanout-enabled | false | Overrides this table's write.spark.fanout.enabled |✅|
 | check-ordering | true | Checks if input schema and table schema are same | |
 | isolation-level | null | Desired isolation level for Dataframe overwrite operations. null => no checks (for idempotent writes), serializable => check for concurrent inserts or deletes in destination partitions, snapshot => checks for concurrent deletes in destination partitions. | |
 | validate-from-snapshot-id | null | If isolation level is set, id of base snapshot from which to check concurrent write conflicts into a table. Should be the snapshot before any reads from the table. Can be obtained via Table API or Snapshots table. If null, the table's oldest known snapshot is used. | |
-| compression-codec | Table write.(fileformat).compression-codec | Overrides this table's compression codec for this write | |
+| compression-codec | Table write.(fileformat).compression-codec | Overrides this table's compression codec for this write |⚠️ Parquet only|
 | compression-level | Table write.(fileformat).compression-level | Overrides this table's compression level for Parquet and Avro tables for this write | |
 | compression-strategy | Table write.orc.compression-strategy | Overrides this table's compression strategy for ORC tables for this write | |
 | distribution-mode | See Spark Writes for defaults | Override this table's distribution mode for this write |🚫|
@@ -200,7 +200,7 @@ extracted from https://iceberg.apache.org/docs/latest/configuration/
 | write.parquet.page-size-bytes | 1048576 (1 MB) | Parquet page size |✅|
 | write.parquet.page-row-limit | 20000 | Parquet page row limit |  |
 | write.parquet.dict-size-bytes | 2097152 (2 MB) | Parquet dictionary page size |  |
-| write.parquet.compression-codec | zstd | Parquet compression codec: zstd, brotli, lz4, gzip, snappy, uncompressed |  |
+| write.parquet.compression-codec | zstd | Parquet compression codec: zstd, brotli, lz4, gzip, snappy, uncompressed |✅|
 | write.parquet.compression-level | null | Parquet compression level |  |
 | write.parquet.bloom-filter-enabled.column.col1 | (not set) | Hint to parquet to write a bloom filter for the column: 'col1' |  |
 | write.parquet.bloom-filter-max-bytes | 1048576 (1 MB) | The maximum number of bytes for a bloom filter bitset |  |
