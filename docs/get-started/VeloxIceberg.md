@@ -127,12 +127,12 @@ The "Gluten Support" column is now ready to be populated with:
 | spark.sql.iceberg.distribution-mode | See Spark Writes | Controls distribution strategy during writes | 🚫 |
 | spark.wap.id | null | Write-Audit-Publish snapshot staging ID | |
 | spark.wap.branch | null | WAP branch name for snapshot commit | |
-| spark.sql.iceberg.compression-codec | Table default | Write compression codec (e.g., zstd, snappy) | |
-| spark.sql.iceberg.compression-level | Table default | Compression level for Parquet/Avro | |
-| spark.sql.iceberg.compression-strategy | Table default | Compression strategy for ORC | |
+| spark.sql.iceberg.compression-codec | Table default | Write compression codec (e.g., zstd, snappy) |✅|
+| spark.sql.iceberg.compression-level | Table default | Compression level for Parquet/Avro |❌|
+| spark.sql.iceberg.compression-strategy | Table default | Compression strategy for ORC |❌|
 | spark.sql.iceberg.data-planning-mode | AUTO | Scan planning mode for data files (AUTO, LOCAL, DISTRIBUTED) | |
 | spark.sql.iceberg.delete-planning-mode | AUTO | Scan planning mode for delete files (AUTO, LOCAL, DISTRIBUTED) | |
-| spark.sql.iceberg.advisory-partition-size | Table default | Advisory size (bytes) used for writing to the Table when Spark's Adaptive Query Execution is enabled. Used to size output files | |
+| spark.sql.iceberg.advisory-partition-size | Table default | Advisory size (bytes) used for writing to the Table when Spark's Adaptive Query Execution is enabled. Used to size output files |❌|
 | spark.sql.iceberg.locality.enabled | false | Report locality information for Spark task placement on executors |✅ |
 | spark.sql.iceberg.executor-cache.enabled | true | Enables cache for executor-side (currently used to cache Delete Files) |❌|
 | spark.sql.iceberg.executor-cache.timeout | 10 | Timeout in minutes for executor cache entries |❌|
