@@ -229,7 +229,7 @@ extracted from https://iceberg.apache.org/docs/latest/configuration/
 | write.summary.partition-limit | 0 | Includes partition-level summary stats in snapshot summaries if the changed partition count is less than this limit |  |
 | write.metadata.delete-after-commit.enabled | false | Controls whether to delete the oldest tracked version metadata files after each table commit. See the Remove old metadata files section for additional details |  |
 | write.metadata.previous-versions-max | 100 | The max number of previous version metadata files to track |  |
-| write.spark.fanout.enabled | false | Enables the fanout writer in Spark that does not require data to be clustered; uses more memory |  |
+| write.spark.fanout.enabled | false | Enables the fanout writer in Spark that does not require data to be clustered; uses more memory |✅|
 | write.object-storage.enabled | false | Enables the object storage location provider that adds a hash component to file paths |  |
 | write.object-storage.partitioned-paths | true | Includes the partition values in the file path |  |
 | write.data.path | table location + /data | Base location for data files |  |
