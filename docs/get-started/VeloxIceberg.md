@@ -124,7 +124,7 @@ The "Gluten Support" column is now ready to be populated with:
 | spark.sql.iceberg.check-ordering | true | Validates the write schema column order matches the table schema order |✅ |
 | spark.sql.iceberg.planning.preserve-data-grouping | false | When true, co-locate scan tasks for the same partition in the same read split, used in Storage Partitioned Joins |✅ |
 | spark.sql.iceberg.aggregate-push-down.enabled | true | Enables pushdown of aggregate functions (MAX, MIN, COUNT) | |
-| spark.sql.iceberg.distribution-mode | See Spark Writes | Controls distribution strategy during writes | ✅ |
+| spark.sql.iceberg.distribution-mode | See Spark Writes | Controls distribution strategy during writes | 🚫 |
 | spark.wap.id | null | Write-Audit-Publish snapshot staging ID | |
 | spark.wap.branch | null | WAP branch name for snapshot commit | |
 | spark.sql.iceberg.compression-codec | Table default | Write compression codec (e.g., zstd, snappy) | |
@@ -221,10 +221,10 @@ extracted from https://iceberg.apache.org/docs/latest/configuration/
 | write.metadata.metrics.column.col1 | (not set) | Metrics mode for column 'col1' to allow per-column tuning; none, counts, truncate(length), or full |  |
 | write.target-file-size-bytes | 536870912 (512 MB) | Controls the size of files generated to target about this many bytes |✅|
 | write.delete.target-file-size-bytes | 67108864 (64 MB) | Controls the size of delete files generated to target about this many bytes |  |
-| write.distribution-mode | not set, see engines for specific defaults, for example Spark Writes | Defines distribution of write data: none: don't shuffle rows; hash: hash distribute by partition key ; range: range distribute by partition key or sort key if table has an SortOrder |  |
-| write.delete.distribution-mode | (not set) | Defines distribution of write delete data |  |
-| write.update.distribution-mode | (not set) | Defines distribution of write update data |  |
-| write.merge.distribution-mode | (not set) | Defines distribution of write merge data |  |
+| write.distribution-mode | not set, see engines for specific defaults, for example Spark Writes | Defines distribution of write data: none: don't shuffle rows; hash: hash distribute by partition key ; range: range distribute by partition key or sort key if table has an SortOrder |🚫|
+| write.delete.distribution-mode | (not set) | Defines distribution of write delete data |🚫|
+| write.update.distribution-mode | (not set) | Defines distribution of write update data |🚫|
+| write.merge.distribution-mode | (not set) | Defines distribution of write merge data |🚫|
 | write.wap.enabled | false | Enables write-audit-publish writes |  |
 | write.summary.partition-limit | 0 | Includes partition-level summary stats in snapshot summaries if the changed partition count is less than this limit |  |
 | write.metadata.delete-after-commit.enabled | false | Controls whether to delete the oldest tracked version metadata files after each table commit. See the Remove old metadata files section for additional details |  |
