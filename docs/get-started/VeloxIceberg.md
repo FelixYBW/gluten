@@ -206,14 +206,14 @@ extracted from https://iceberg.apache.org/docs/latest/configuration/
 | write.parquet.bloom-filter-max-bytes | 1048576 (1 MB) | The maximum number of bytes for a bloom filter bitset |  |
 | write.parquet.bloom-filter-fpp.column.col1 | 0.01 | The false positive probability for a bloom filter applied to 'col1' (must > 0.0 and < 1.0) |  |
 | write.parquet.stats-enabled.column.col1 | (not set) | Controls whether to collect parquet column statistics for column 'col1' |  |
-| write.avro.compression-codec | gzip | Avro compression codec: gzip(deflate with 9 level), zstd, snappy, uncompressed |  |
-| write.avro.compression-level | null | Avro compression level |  |
-| write.orc.stripe-size-bytes | 67108864 (64 MB) | Define the default ORC stripe size, in bytes |  |
-| write.orc.block-size-bytes | 268435456 (256 MB) | Define the default file system block size for ORC files |  |
-| write.orc.compression-codec | zlib | ORC compression codec: zstd, lz4, lzo, zlib, snappy, none |  |
-| write.orc.compression-strategy | speed | ORC compression strategy: speed, compression |  |
-| write.orc.bloom.filter.columns | (not set) | Comma separated list of column names for which a Bloom filter must be created |  |
-| write.orc.bloom.filter.fpp | 0.05 | False positive probability for Bloom filter (must > 0.0 and < 1.0) |  |
+| write.avro.compression-codec | gzip | Avro compression codec: gzip(deflate with 9 level), zstd, snappy, uncompressed |❌|
+| write.avro.compression-level | null | Avro compression level |❌|
+| write.orc.stripe-size-bytes | 67108864 (64 MB) | Define the default ORC stripe size, in bytes |❌|
+| write.orc.block-size-bytes | 268435456 (256 MB) | Define the default file system block size for ORC files |❌|
+| write.orc.compression-codec | zlib | ORC compression codec: zstd, lz4, lzo, zlib, snappy, none |❌|
+| write.orc.compression-strategy | speed | ORC compression strategy: speed, compression |❌|
+| write.orc.bloom.filter.columns | (not set) | Comma separated list of column names for which a Bloom filter must be created |❌|
+| write.orc.bloom.filter.fpp | 0.05 | False positive probability for Bloom filter (must > 0.0 and < 1.0) |❌|
 | write.location-provider.impl | null | Optional custom implementation for LocationProvider |  |
 | write.metadata.compression-codec | none | Metadata compression codec; none or gzip |  |
 | write.metadata.metrics.max-inferred-column-defaults | 100 | Defines the maximum number of columns for which metrics are collected. Columns are included with a pre-order traversal of the schema: top level fields first; then all elements of the first nested s... |  |
