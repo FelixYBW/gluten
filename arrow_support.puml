@@ -1,0 +1,131 @@
+@startuml
+!define EXEC_COLOR #E8F5E9
+!define TRANSITION_COLOR #E3F2FD
+!define TRAIT_COLOR #FFF9C4
+!define CONVENTION_INTERFACE_COLOR #FFE0B2
+
+package "Spark - org.apache.spark.sql.execution" #Lightblue {
+  class SparkPlan TRAIT_COLOR
+  class UnaryExecNode TRAIT_COLOR
+  class EvalPythonExec EXEC_COLOR
+}
+
+package "gluten - shims.spark.sql.execution.python" #LightYellow {
+  note as N0
+    **Gluten Shim Layer**
+    Compatibility layer for different
+    Spark versions (3.3, 3.4, 3.5, 4.0, 4.1)
+  end note
+  
+  class EvalPythonExecBase EXEC_COLOR
+}
+package "gluten - org.apache.gluten" #LightYellow {
+  package "extension.columnar.transition" {
+    interface "Convention.KnownBatchType" as KnownBatchType CONVENTION_INTERFACE_COLOR {
+      +batchType(): Convention.BatchType
+    }
+
+    interface "Convention.KnownRowType" as KnownRowType CONVENTION_INTERFACE_COLOR {
+      +rowType(): Convention.RowType
+    }
+  }
+
+  package "execution" {
+    class GlutenPlan TRAIT_COLOR
+    class ValidatablePlan TRAIT_COLOR
+    class ColumnarToColumnarTransition TRANSITION_COLOR
+    class ColumnarToColumnarExec EXEC_COLOR
+    class GlutenColumnarToColumnarTransition TRANSITION_COLOR
+
+    class LoadArrowDataExec EXEC_COLOR {
+      #from: ArrowNativeBatchType
+      #to: ArrowJavaBatchType
+    }
+
+    class OffloadArrowDataExec EXEC_COLOR {
+      #from: ArrowJavaBatchType
+      #to: ArrowNativeBatchType
+    }
+
+    class ArrowColumnarToVeloxColumnarExec EXEC_COLOR {
+      #from: ArrowNativeBatchType
+      #to: VeloxBatchType
+    }
+    
+    ColumnarToColumnarExec -[hidden]right- GlutenColumnarToColumnarTransition
+  }
+}
+
+package "gluten - org.apache.spark.api.python" #LightYellow {
+  
+  class "ColumnarArrowEvalPythonExec" as ColumnarArrowEvalPythonExec EXEC_COLOR {
+    +batchType(): Convention.BatchType
+    +rowType(): Convention.RowType
+    #doValidateInternal(): ValidationResult
+    +requiredChildConvention(): Seq[ConventionReq]
+    +metrics: Map[String, SQLMetric]
+    #doExecuteColumnar(): RDD[ColumnarBatch]
+    #withNewChildInternal(newChild: SparkPlan): ColumnarArrowEvalPythonExec
+    #evaluateColumnar(...): Iterator[ColumnarBatch]
+    -adjustRefCnt(vector: ArrowWritableColumnVector, to: Long): Unit
+  }
+}
+
+SparkPlan <|-- UnaryExecNode
+SparkPlan <|-- GlutenPlan
+KnownBatchType <|.. GlutenPlan
+KnownRowType <|.. GlutenPlan
+GlutenPlan <|-- ValidatablePlan
+UnaryExecNode <|-- ColumnarToColumnarTransition
+GlutenPlan <|-- ColumnarToColumnarExec
+UnaryExecNode <|-- ColumnarToColumnarExec
+ColumnarToColumnarTransition <|-- GlutenColumnarToColumnarTransition
+GlutenPlan <|-- GlutenColumnarToColumnarTransition
+
+ColumnarToColumnarExec <|-- LoadArrowDataExec
+GlutenColumnarToColumnarTransition <|-- LoadArrowDataExec
+ColumnarToColumnarExec <|-- OffloadArrowDataExec
+GlutenColumnarToColumnarTransition <|-- OffloadArrowDataExec
+ColumnarToColumnarExec <|-- ArrowColumnarToVeloxColumnarExec
+GlutenColumnarToColumnarTransition <|-- ArrowColumnarToVeloxColumnarExec
+
+ColumnarToColumnarExec -[hidden]down-> ColumnarToColumnarTransition
+
+
+
+EvalPythonExec <|--- EvalPythonExecBase
+EvalPythonExecBase <|-- ColumnarArrowEvalPythonExec
+ValidatablePlan <|-- ColumnarArrowEvalPythonExec
+
+note bottom of LoadArrowDataExec
+  **Transition Insertion Call Flow**
+  
+  1. InsertTransitions.apply(plan)
+     -> RemoveTransitions.apply(plan)  // Remove existing transitions
+     -> fillWithTransitions(plan)      // Insert new transitions
+         -> applyForNode(node)          // For each node with children
+             -> ConventionFunc.conventionReqOf(node)
+                 // Gets parent's required child conventions
+                 // e.g., ColumnarArrowEvalPythonExec.requiredChildConvention()
+                 //       returns ConventionReq.Is(ArrowJavaBatchType)
+             -> ConventionFunc.conventionOf(child)
+                 // Gets child's output convention
+                 // e.g., VeloxOperator.batchType() returns VeloxBatchType
+             -> Transition.factory.findTransitionOrThrow(from, to)
+                 // Finds transition path in registered graph
+                 // VeloxBatchType -> ArrowNativeBatchType -> ArrowJavaBatchType
+                 // Returns: LoadArrowDataExec
+             -> transition.apply(child)
+                 // Wraps child with transition operators
+     -> Transitions.enforceReq(filled, convReq)
+  
+  **Example Result:**
+  VeloxOperator (VeloxBatchType)
+    | [inserted by transition]
+  ArrowColumnarToVeloxColumnarExec (-> ArrowNativeBatchType)
+    | [inserted by transition]
+  LoadArrowDataExec (-> ArrowJavaBatchType)
+    |
+  ColumnarArrowEvalPythonExec (requires ArrowJavaBatchType)
+end note
+@enduml

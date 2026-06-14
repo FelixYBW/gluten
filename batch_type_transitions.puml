@@ -1,0 +1,68 @@
+@startuml Batch Type Transitions
+!define BATCH_TYPE_COLOR #E1F5FE
+!define TRANSITION_COLOR #FFF9C4
+!define ROW_TYPE_COLOR #F3E5F5
+
+title Gluten Batch Type Transition Graph
+
+' Batch Types
+state "VanillaBatchType" as VanillaBatch BATCH_TYPE_COLOR
+state "ArrowJavaBatchType" as ArrowJava BATCH_TYPE_COLOR
+state "ArrowNativeBatchType" as ArrowNative BATCH_TYPE_COLOR
+state "VeloxBatchType" as Velox BATCH_TYPE_COLOR
+state "VanillaRowType" as VanillaRow ROW_TYPE_COLOR
+
+note right of ArrowJava
+  **ArrowJavaBatchType**
+  - Java Arrow-based columnar batch
+  - Uses ArrowWritableColumnVector
+  - Compatible with vanilla batch
+  - Provides valid get<type>(...) implementations
+end note
+
+note right of ArrowNative
+  **ArrowNativeBatchType**
+  - Native Arrow-based columnar batch
+  - Uses IndicatorVector as first vector
+  - Optimized for native processing
+end note
+
+note right of Velox
+  **VeloxBatchType**
+  - Velox backend columnar batch
+  - Native Velox format
+  - High-performance execution
+end note
+
+' Transitions between batch types
+ArrowJava --> VanillaBatch : Transition.empty\n(no-op, compatible)
+ArrowJava --> ArrowNative : **OffloadArrowDataExec**\nOffload to native
+ArrowNative --> ArrowJava : **LoadArrowDataExec**\nLoad to Java
+ArrowNative --> Velox : **ArrowColumnarToVeloxColumnarExec**\nConvert to Velox
+
+' Row to Batch transitions
+VanillaRow --> Velox : **RowToVeloxColumnarExec**\nRow to Velox batch
+Velox --> VanillaRow : **VeloxColumnarToRowExec**\nVelox batch to Row
+
+' Reverse transition (empty)
+Velox --> ArrowNative : Transition.empty\n(no conversion needed)
+
+legend right
+  **Transition Types:**
+  - Solid arrows: Active transitions with operators
+  - Dashed arrows: Empty transitions (no-op)
+  
+  **Operator Colors:**
+  - Light Blue: Batch Types
+  - Light Yellow: Transition Operators
+  - Light Purple: Row Type
+  
+  **Key Operators:**
+  - LoadArrowDataExec: Native → Java Arrow
+  - OffloadArrowDataExec: Java → Native Arrow
+  - ArrowColumnarToVeloxColumnarExec: Arrow → Velox
+  - RowToVeloxColumnarExec: Row → Velox
+  - VeloxColumnarToRowExec: Velox → Row
+endlegend
+
+@enduml
