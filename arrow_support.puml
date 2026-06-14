@@ -31,11 +31,26 @@ package "gluten - org.apache.gluten" #LightYellow {
   }
 
   package "execution" {
-    class GlutenPlan TRAIT_COLOR
-    class ValidatablePlan TRAIT_COLOR
+    class GlutenPlan TRAIT_COLOR{
+        + batchType()
+        + rowType()
+        + requiredChildConvention()
+    }
+    class ValidatablePlan TRAIT_COLOR {
+        + doValidate()
+    }
     class ColumnarToColumnarTransition TRANSITION_COLOR
-    class ColumnarToColumnarExec EXEC_COLOR
-    class GlutenColumnarToColumnarTransition TRANSITION_COLOR
+    class ColumnarToColumnarExec EXEC_COLOR{
+        # mapIterator()
+        # doExecuteColumnar()
+    }
+    class GlutenColumnarToColumnarTransition TRANSITION_COLOR{
+        # from: Conversion.BatchType
+        # to: Conversion.BatchType
+        + batchType() = to
+        + rowType() = None
+        + requiredChildConvention()
+    }
 
     class LoadArrowDataExec EXEC_COLOR {
       #from: ArrowNativeBatchType
