@@ -30,14 +30,24 @@ concurrency:
 
 jobs:
   clang-tidy-check:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only run for PRs from the same repository (not forks) to prevent
+    # untrusted code from executing in the privileged base-repo context.
+    # workflow_run always has base-repository permissions regardless of
+    # where the triggering PR originated, so this guard is mandatory.
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-22.04
     container: apache/gluten:centos-8-jdk8
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
       # Workspaces bind-mounted into containers are often owned by a different UID than the
       # container user; Git 2.35+ refuses operations unless the directory is marked safe.
       - name: Configure Git safe directory (container)
