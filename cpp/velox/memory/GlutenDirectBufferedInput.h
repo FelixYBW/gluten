@@ -40,8 +40,7 @@ namespace detail {
 // it).
 class ExecutorBarrierHolder {
  public:
-  explicit ExecutorBarrierHolder(folly::Executor* executor)
-      : rawExecutor_(executor), barrier_(makeBarrier(executor)) {}
+  explicit ExecutorBarrierHolder(folly::Executor* executor) : rawExecutor_(executor), barrier_(makeBarrier(executor)) {}
 
  protected:
   // The unwrapped executor, to be handed to clones instead of this object's
@@ -69,7 +68,7 @@ class ExecutorBarrierHolder {
 } // namespace detail
 
 class GlutenDirectBufferedInput : private detail::ExecutorBarrierHolder,
-                                 public facebook::velox::dwio::common::DirectBufferedInput {
+                                  public facebook::velox::dwio::common::DirectBufferedInput {
  public:
   GlutenDirectBufferedInput(
       std::shared_ptr<facebook::velox::ReadFile> readFile,
