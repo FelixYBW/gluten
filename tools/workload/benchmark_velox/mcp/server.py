@@ -84,62 +84,17 @@ _FILE_SERVER_ROOT = "./output"
 _FILE_SERVER_BASE_URL = "http://127.0.0.1:6020"
 
 
-def _get_appals(appid: str, spark=None, driver_ip: str = ""):
-    """Create a Spark session (if not provided) and load App_Log_Analysis_Enhanced from database.
-
-    If load_data_from_database fails or returns no data (query_num == 0), and the local
-    event-log file output/<appid>/<appid> does not already exist, and driver_ip is provided,
-    the log is fetched from the driver via:
-        ssh centos@<driver_ip> docker ps --format '{{.Names}}' | head -1  # get container name
-        ssh centos@<driver_ip> docker cp <container_name>:/opt/spark/events/<appid> /tmp/
-        scp centos@<driver_ip>:/tmp/<appid> output/<appid>/<appid>
-    The instance is then reloaded from the local file.
-    """
-    import subprocess as _sub
+def _get_appals(appid: str, spark=None):
+    """Load App_Log_Analysis_Enhanced for *appid* from the database via Spark Connect."""
     from pyspark.sql import SparkSession
     from script.sparklog_extend import App_Log_Analysis_Enhanced
     if spark is None:
         spark = SparkSession.builder.remote("sc://127.0.0.1:15002/").getOrCreate()
 
-    local_log = os.path.join(_FILE_SERVER_ROOT, appid, appid)
-
-    # --- attempt database load -----------------------------------------------
-    db_ok = False
-    try:
-        appals = App_Log_Analysis_Enhanced(None, None, spark=spark)
-        appals.load_data_from_database(appid)
-        if getattr(appals, "query_num", None) != 0:
-            db_ok = True
-    except Exception:
-        appals = None
-
-    if db_ok:
-        return appals
-
-    # --- fallback: fetch event log from driver via SSH/SCP -------------------
-    if not os.path.exists(local_log):
-        if driver_ip:
-            os.makedirs(os.path.dirname(local_log), exist_ok=True)
-            # get the Spark container name on the driver, then copy the event log
-            get_container_cmd = f'ssh centos@{driver_ip} "docker ps --format \'{{{{.Names}}}}\' | head -1"'
-            container_name = _sub.check_output(get_container_cmd, shell=True).decode().strip()
-            ssh_cmd = (
-                f'ssh centos@{driver_ip} '
-                f'"docker cp {container_name}:/opt/spark/events/{appid} /tmp/"'
-            )
-            _sub.run(ssh_cmd, shell=True, check=True)
-            # pull the file to local output/<appid>/<appid>
-            scp_cmd = f"scp centos@{driver_ip}:/tmp/{appid} {local_log}"
-            _sub.run(scp_cmd, shell=True, check=True)
-        else:
-            # no driver_ip — re-raise or return what we have (may be empty)
-            if appals is None:
-                appals = App_Log_Analysis_Enhanced(None, None, spark=spark)
-            return appals
-
-    # --- load from local file ------------------------------------------------
-    appals = App_Log_Analysis_Enhanced(local_log, None, spark=spark)
-    appals.load_data()
+    appals = App_Log_Analysis_Enhanced(None, None, spark=spark)
+    appals.load_data_from_database(appid)
+    if getattr(appals, "query_num", None) == 0:
+        raise ValueError(f"No data found in the database for appid '{appid}'")
     return appals
 
 mcp = FastMCP("eventlog analysis")
@@ -299,15 +254,13 @@ def get_basic_state_usage() -> str:
     return _usage_section("get_basic_state")
 
 @mcp.tool()
-def get_basic_state(appid: str, driver_ip: str = "") -> str:
+def get_basic_state(appid: str) -> str:
     """
     Return basic runtime statistics for a Spark application: executor config,
     speculative task counts, runtime, spill, shuffle, I/O totals, etc.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         stats = appals.get_basic_state()
         return json.dumps(stats, default=str)
     except Exception as e:
@@ -319,15 +272,13 @@ def get_query_time_usage() -> str:
     return _usage_section("get_query_time")
 
 @mcp.tool()
-def get_query_time(appid: str, queryid: str = "", driver_ip: str = "") -> str:
+def get_query_time(appid: str, queryid: str = "") -> str:
     """
     Return per-query elapsed time, I/O, shuffle, spill, and task metrics as JSON.
     Leave queryid empty to get all queries.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         kwargs = {}
         if queryid:
             kwargs["queryid"] = queryid
@@ -342,14 +293,12 @@ def get_spark_config_usage() -> str:
     return _usage_section("get_spark_config")
 
 @mcp.tool()
-def get_spark_config(appid: str, driver_ip: str = "") -> str:
+def get_spark_config(appid: str) -> str:
     """
     Return the Spark configuration key/value pairs for the given application.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         df = appals.get_spark_config()
         return df.to_json()
     except Exception as e:
@@ -361,14 +310,12 @@ def get_operator_count_usage() -> str:
     return _usage_section("get_operator_count")
 
 @mcp.tool()
-def get_operator_count(appid: str, driver_ip: str = "") -> str:
+def get_operator_count(appid: str) -> str:
     """
     Return the count of each physical plan operator per query for the application.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         df = appals.getOperatorCount()
         return df.to_json()
     except Exception as e:
@@ -380,15 +327,13 @@ def get_table_scan_metrics_usage() -> str:
     return _usage_section("get_table_scan_metrics")
 
 @mcp.tool()
-def get_table_scan_metrics(appid: str, driver_ip: str = "") -> str:
+def get_table_scan_metrics(appid: str) -> str:
     """
     Return table scan metrics (bytes read, row groups, splits, Velox stats, etc.)
     aggregated by scan node for the application.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         appals.get_table_scan_metrics(plot=False)
         return "Table scan metrics retrieved (output suppressed in non-notebook mode)."
     except Exception as e:
@@ -400,15 +345,13 @@ def get_metric_output_rowcnt_usage() -> str:
     return _usage_section("get_metric_output_rowcnt")
 
 @mcp.tool()
-def get_metric_output_rowcnt(appid: str, queryid: str = "", driver_ip: str = "") -> str:
+def get_metric_output_rowcnt(appid: str, queryid: str = "") -> str:
     """
     Return output row counts per operator and stage.
     Leave queryid empty to get all queries.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         kwargs = {}
         if queryid:
             kwargs["queryid"] = queryid
@@ -425,15 +368,13 @@ def get_metric_input_rowcnt_usage() -> str:
     return _usage_section("get_metric_input_rowcnt")
 
 @mcp.tool()
-def get_metric_input_rowcnt(appid: str, queryid: str = "", driver_ip: str = "") -> str:
+def get_metric_input_rowcnt(appid: str, queryid: str = "") -> str:
     """
     Return input row counts per operator and stage.
     Leave queryid empty to get all queries.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         kwargs = {}
         if queryid:
             kwargs["queryid"] = queryid
@@ -450,15 +391,13 @@ def get_hottest_stages_usage() -> str:
     return _usage_section("get_hottest_stages")
 
 @mcp.tool()
-def get_hottest_stages(appid: str, queryid: str = "", top_n: int = 10, driver_ip: str = "") -> str:
+def get_hottest_stages(appid: str, queryid: str = "", top_n: int = 10) -> str:
     """
     Return the stages with the highest elapsed time, sorted descending.
     Optionally filter by queryid. top_n controls how many stages to return.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         kwargs = {"plot": False}
         if queryid:
             kwargs["queryid"] = queryid
@@ -473,15 +412,13 @@ def get_critical_path_stages_usage() -> str:
     return _usage_section("get_critical_path_stages")
 
 @mcp.tool()
-def get_critical_path_stages(appid: str, driver_ip: str = "") -> str:
+def get_critical_path_stages(appid: str) -> str:
     """
     Return stages on the critical execution path with elapsed time, host,
     executor, bytes read, and shuffle read.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         df = appals.get_critical_path_stages()
         return df.to_json(orient="records")
     except Exception as e:
@@ -493,15 +430,13 @@ def get_stage_stat_usage() -> str:
     return _usage_section("get_stage_stat")
 
 @mcp.tool()
-def get_stage_stat(appid: str, queryid: str, driver_ip: str = "") -> str:
+def get_stage_stat(appid: str, queryid: str) -> str:
     """
     Return detailed per-stage statistics for a specific query: elapsed time,
     spill, shuffle, deserialize time, GC time, CPU time, etc.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         df = appals.get_stage_stat(queryid=queryid)
         return df.to_json(orient="records")
     except Exception as e:
@@ -513,15 +448,13 @@ def get_query_plan_usage() -> str:
     return _usage_section("get_query_plan")
 
 @mcp.tool()
-def get_query_plan(appid: str, queryid: str = "", stageid: int = 0, driver_ip: str = "") -> str:
+def get_query_plan(appid: str, queryid: str = "", stageid: int = 0) -> str:
     """
     Return the query execution plan data structure (nodes, stage times, metrics).
     Provide either queryid or stageid to filter; leave both empty for all queries.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         kwargs = {}
         if queryid:
             kwargs["queryid"] = queryid
@@ -538,15 +471,13 @@ def print_query_plan_puml_usage() -> str:
     return _usage_section("print_query_plan_puml")
 
 @mcp.tool()
-def print_query_plan_puml(appid: str, queryid: str = "", stageid: int = 0, driver_ip: str = "") -> str:
+def print_query_plan_puml(appid: str, queryid: str = "", stageid: int = 0) -> str:
     """
     Generate a PlantUML diagram source string for the query execution plan.
     Provide either queryid or stageid to filter.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         kwargs = {}
         if queryid:
             kwargs["queryid"] = queryid
@@ -562,16 +493,14 @@ def get_shuffle_stat_usage() -> str:
     return _usage_section("get_shuffle_stat")
 
 @mcp.tool()
-def get_shuffle_stat(appid: str, queryid: str = "", driver_ip: str = "") -> str:
+def get_shuffle_stat(appid: str, queryid: str = "") -> str:
     """
     Return shuffle statistics: split ratio, compress ratio, batch sizes,
     shuffle write time breakdown, and data type distribution.
     Leave queryid empty for all queries.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         kwargs = {}
         if queryid:
             kwargs["queryid"] = queryid
@@ -590,15 +519,13 @@ def get_stages_w_odd_partitions_usage() -> str:
     return _usage_section("get_stages_w_odd_partitions")
 
 @mcp.tool()
-def get_stages_w_odd_partitions(appid: str, driver_ip: str = "") -> str:
+def get_stages_w_odd_partitions(appid: str) -> str:
     """
     Return stages whose partition count does not divide evenly into the
     executor × cores configuration — a hint for partition tuning.
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         df = appals.get_stages_w_odd_partitions()
         return df.to_json(orient="records")
     except Exception as e:
@@ -610,15 +537,13 @@ def get_metrics_by_node_usage() -> str:
     return _usage_section("get_metrics_by_node")
 
 @mcp.tool()
-def get_metrics_by_node(appid: str, node_name: str, driver_ip: str = "") -> str:
+def get_metrics_by_node(appid: str, node_name: str) -> str:
     """
     Return aggregated metrics for a specific query plan node type
     (e.g. 'ColumnarExchange', 'IcebergScanTransformer').
-    If the database load fails or returns no data and driver_ip is provided,
-    the event log is fetched from the driver via SSH/SCP.
     """
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         result = appals.get_metrics_by_node(node_name)
         if hasattr(result, "toPandas"):
             return result.toPandas().to_json(orient="records")
@@ -791,7 +716,6 @@ def generate_puml_from_eventlog(
     appid: str,
     queryid: str,
     simple: bool = False,
-    driver_ip: str = "",
 ) -> str:
     """
     Load a Spark application's query plan from the Iceberg database, generate
@@ -802,14 +726,12 @@ def generate_puml_from_eventlog(
         appid:     Spark application ID.
         queryid:   Query ID (e.g. "q7", "q23a").
         simple:    Not used by the database-backed generator; reserved for future use.
-        driver_ip: IP of the Spark driver; used to fetch the event log via SSH/SCP
-                   when the database load fails or returns no data.
 
     Returns a JSON object with puml_file, png_file, puml_url, and png_url.
     """
     import json as _json
     try:
-        appals = _get_appals(appid, driver_ip=driver_ip)
+        appals = _get_appals(appid)
         puml_content = appals.print_query_plan_puml(queryid=queryid)
 
         out_folder = os.path.join(_FILE_SERVER_ROOT, appid)
@@ -847,9 +769,6 @@ def _parse_spark_ui_url(url: str):
           https://host/proxy/app-xxx/SQL/execution/?id=1
       • Already a REST API URL :
           http://host/api/v1/applications/app-xxx/sql/1
-
-    If the host resolves to 127.0.0.1 (loopback) the caller must supply
-    driver_ip so the request can be tunnelled via SSH.
 
     Returns:
         app_id    (str)
@@ -924,7 +843,6 @@ def generate_puml_from_rest_url(
     url: str,
     simple_chart: bool = False,
     from_explain_text: bool = False,
-    driver_ip: str = "",
 ) -> str:
     """
     Fetch a Spark query plan from the REST API, generate a PlantUML diagram
@@ -935,11 +853,7 @@ def generate_puml_from_rest_url(
       • PrestoDB proxy    : https://host/proxy/app-xxx/SQL/execution/?id=1
       • REST API directly : http://127.0.0.1:18080/api/v1/applications/app-xxx/sql/1
 
-    When the REST URL resolves to 127.0.0.1 (the Spark driver), driver_ip must
-    be supplied and the plan JSON is fetched via:
-        ssh centos@<driver_ip> curl <url>
-
-    Otherwise the URL is fetched directly with curl.
+    The plan JSON is fetched with ``curl -s <rest_url>``.
 
     The plan JSON is saved to output/<app_id>/<query_id>.plan before generating
     the diagram.
@@ -949,39 +863,22 @@ def generate_puml_from_rest_url(
         simple_chart:      Suppress Project / Filter / Exchange nodes.
         from_explain_text: Use PlanTextUMLGenerator on planDescription instead
                            of the nodes/edges REST graph.
-        driver_ip:         IP of the Spark driver host; required when the REST
-                           URL is on 127.0.0.1 / localhost.
 
     Returns a JSON object with puml_file, png_file, puml_url, png_url, plan_file.
     """
     import json as _json
     import subprocess as _sub
-    import urllib.parse as _up
 
     try:
         # ---- 1. Parse / convert URL ---------------------------------------
         app_id, query_id, rest_url = _parse_spark_ui_url(url)
-
-        parsed = _up.urlparse(rest_url)
-        needs_ssh = parsed.hostname in ('127.0.0.1', 'localhost', '::1')
-
-        if needs_ssh and not driver_ip:
-            return (
-                "Error: the REST URL resolves to 127.0.0.1 (the Spark driver). "
-                "Please provide driver_ip so the plan can be fetched via SSH."
-            )
 
         # ---- 2. Fetch plan JSON -------------------------------------------
         out_dir = os.path.join(_FILE_SERVER_ROOT, app_id)
         os.makedirs(out_dir, exist_ok=True)
         plan_file = os.path.join(out_dir, f"{query_id}.plan")
 
-        if needs_ssh:
-            cmd = f'ssh centos@{driver_ip} curl -s "{rest_url}"'
-        else:
-            cmd = f'curl -s "{rest_url}"'
-
-        result_bytes = _sub.check_output(cmd, shell=True, stderr=_sub.PIPE)
+        result_bytes = _sub.check_output(["curl", "-s", rest_url], stderr=_sub.PIPE)
         plan_json = _json.loads(result_bytes.decode('utf-8', errors='replace'))
 
         with open(plan_file, 'w', encoding='utf-8') as f:
@@ -1028,6 +925,58 @@ def generate_puml_from_rest_url(
     except Exception as e:
         return f"Error: {e}"
 
+
+# ---------------------------------------------------------------------------
+# analyze_eventlog_failures
+# ---------------------------------------------------------------------------
+
+@mcp.prompt()
+def analyze_eventlog_failures_usage() -> str:
+    return _usage_section("analyze_eventlog_failures")
+
+
+@mcp.tool()
+def analyze_eventlog_failures(eventlog: str, max_traces_per_cause: int = 5) -> str:
+    """
+    Analyze task failures in a Spark event log and return a markdown report:
+    task end reason summary, ExecutorLostFailure loss reasons and affected
+    stages, ExceptionFailure classification (root cause, error code, operator)
+    with stack traces, and failed SQL executions reported by the driver.
+
+    eventlog is the absolute path of the event log file or directory; it is
+    read by the Spark Connect server, so it must be reachable from there.
+    max_traces_per_cause limits how many full stack traces are printed per
+    root cause (<= 0 prints all).
+
+    The report is also saved to output/<appid>/<appid>_failure_analysis.md.
+    Return the markdown to the user as-is, optionally followed by a short
+    summary of the most likely root causes.
+    """
+    try:
+        from pyspark.sql import SparkSession
+        from script.eventlog_failure_report import generate_failure_report
+
+        if not os.path.isabs(eventlog):
+            return f"Error: eventlog must be an absolute path, got '{eventlog}'."
+
+        spark = SparkSession.builder.remote("sc://127.0.0.1:15002/").getOrCreate()
+        report, appid = generate_failure_report(
+            spark, eventlog, max_traces_per_cause=max_traces_per_cause
+        )
+
+        out_folder = os.path.join(_FILE_SERVER_ROOT, appid)
+        os.makedirs(out_folder, exist_ok=True)
+        report_path = os.path.join(out_folder, f"{appid}_failure_analysis.md")
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(report)
+
+        return (
+            f"{report}\n\n"
+            f"<!-- event log: {eventlog}; report saved to {report_path} "
+            f"({_file_server_url(report_path)}) -->"
+        )
+    except Exception as e:
+        return f"Error: {e}"
 
 if __name__ == "__main__":
     mcp.settings.host = HOST

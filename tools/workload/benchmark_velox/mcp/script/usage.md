@@ -23,7 +23,7 @@ This document describes the MCP tools exposed by this server for Spark query pla
 
 ---
 
-> All Spark Log Analysis tools below connect to a remote Spark session at `sc://127.0.0.1:15002/` and load application data from pre-processed Iceberg database tables using `App_Log_Analysis_Enhanced.load_data_from_database(appid)`. Every tool takes `appid` as a required first parameter and an optional `driver_ip` parameter. When the database load fails or returns no data (`query_num == 0`) and `driver_ip` is set, the event log is automatically fetched from the driver host via SSH/SCP (`ssh <driver_ip> docker cp …` then `scp <driver_ip>:/tmp/<appid> output/<appid>/<appid>`) and reloaded from the local file.
+> All Spark Log Analysis tools below connect to a remote Spark session at `sc://127.0.0.1:15002/` and load application data from pre-processed Iceberg database tables using `App_Log_Analysis_Enhanced.load_data_from_database(appid)`. Every tool takes `appid` as a required first parameter and returns an error when the application is not found in the database.
 
 ---
 
@@ -36,7 +36,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON object with fields: `appid`, `executor.instances`, `executor.cores`, `shuffle.partitions`, `batch size`, `real executors`, `Failed Tasks`, `Speculative Tasks`, `Speculative Killed Tasks`, `Speculative Stage`, `runtime`, `disk spilled`, `memspilled`, `local_read`, `remote_read`, `shuffle_write`, `task run time`, `ser_time`, `f_wait_time`, `gc_time`, `input read`, `storage read`, `ram read`, `ssd read`, `acc_task_time`.
 
@@ -52,7 +51,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
 | `queryid` | no | `""` | Query ID to filter (e.g. `"q7"`); omit for all queries |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON keyed by `real_queryid` with columns: `runtime`, `input read`, `disk spilled`, `memspilled`, `local_read`, `remote_read`, `shuffle_write`, `run_time`, `ser_time`, `f_wait_time`, `gc_time`, `peak_mem`, `acc_task_time`, `output rows`, `storage read`, `executors`, `core/exec`, `parallelism`.
 
@@ -67,7 +65,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON of configuration key → value.
 
@@ -82,7 +79,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON table with operators as rows and query IDs as columns.
 
@@ -97,7 +93,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** Confirmation string (metrics are large; use in a Jupyter session for full display).
 
@@ -113,7 +108,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
 | `queryid` | no | `""` | Query ID to filter; omit for all queries |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON records with `nodename`, `Stage ID`, `total_row` (millions), `stage time`.
 
@@ -129,7 +123,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
 | `queryid` | no | `""` | Query ID to filter; omit for all queries |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON records with `nodename`, `Stage ID`, `total_row` (millions), `stage time`.
 
@@ -146,7 +139,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 | `appid` | yes | — | Spark application ID |
 | `queryid` | no | `""` | Query ID to filter; omit for all queries |
 | `top_n` | no | `10` | Number of top stages to return |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON records with `Stage ID`, `Job ID`, `real_queryid`, `total_time` (seconds), `stdev_time`, `partition#`, `acc_total`, `total`.
 
@@ -161,7 +153,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON records with `real_queryid`, `elapsed` (seconds), `Host`, `executor ID`, `Stage ID`, `Task ID`, `file read` (MB), `shuffle read` (MB).
 
@@ -177,7 +168,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
 | `queryid` | yes | — | Query ID to analyze (e.g. `"q7"`) |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON records per stage with columns: `Job ID`, `Stage ID`, `elapsed time`, `disk spilled`, `mem spilled`, `local read`, `remote read`, `shuffle write`, `deseri time`, `fetch wait time`, `shuffle write time`, `seri time`, `get result time`, `gc time`, `exe cpu time`, `input read`.
 
@@ -194,7 +184,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 | `appid` | yes | — | Spark application ID |
 | `queryid` | no | `""` | Query ID to filter (e.g. `"q7"`) |
 | `stageid` | no | `0` | Stage ID to filter |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON with `queries` (list of query plan trees), `plan_nodes` (flat list of node dicts with metrics), `apptotaltime`, executor config.
 
@@ -211,7 +200,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 | `appid` | yes | — | Spark application ID |
 | `queryid` | no | `""` | Query ID to filter |
 | `stageid` | no | `0` | Stage ID to filter |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** PlantUML source string starting with `@startuml`. Nodes are grouped by stage, coloured by type (scan=blue, join=green, agg=yellow, exchange=red, etc.), and stage boxes are coloured by execution time (green=fast → red=slow).
 
@@ -229,7 +217,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
 | `queryid` | no | `""` | Query ID to filter; omit for all queries |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON records per exchange node with fields: `map_stageid`, `reducer_stageid`, `shuffle bytes written` (GB), `data size` (GB), `time to split`, `time to compress`, `shuffle write time`, `time to spill`, `records read`, `local blocks read`, `remote bytes read`, and batch size metrics.
 
@@ -259,7 +246,6 @@ This document describes the MCP tools exposed by this server for Spark query pla
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
 | `node_name` | yes | — | Plan node name, e.g. `"ColumnarExchange"`, `"IcebergScanTransformer"`, `"HashAggregateTransformer"` |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON records with `real_queryid`, `nodeID`, `Stage ID`, plus all metric columns (sum, mean, stddev) and `ElapsedTime`, `partnum`.
 
@@ -301,7 +287,6 @@ PUML files, followed by instructions for the client to fetch the URLs and summar
 |---|---|---|---|
 | `appid` | yes | — | Spark application ID |
 | `queryid` | yes | — | Query ID to generate the plan for (e.g. `"q7"`, `"q23a"`) |
-| `driver_ip` | no | `""` | IP of the Spark driver; used to fetch the event log via SSH/SCP when the database load fails or returns no data |
 
 **Returns:** JSON object with:
 
@@ -337,7 +322,7 @@ PUML files, followed by instructions for the client to fetch the URLs and summar
 | `https://host/proxy/app-xxx/SQL/execution/?id=N` | `http://127.0.0.1:4040/api/v1/applications/app-xxx/sql/N` |
 | `http://127.0.0.1:18080/api/v1/applications/app-xxx/sql/N` | (unchanged) |
 
-When the REST URL points to `127.0.0.1`, `driver_ip` must be supplied and the JSON is fetched via `ssh centos@<driver_ip> curl <url>`. Otherwise `curl` is used directly.
+The plan JSON is fetched with `curl -s <rest_url>`.
 
 **Parameters:**
 
@@ -346,7 +331,6 @@ When the REST URL points to `127.0.0.1`, `driver_ip` must be supplied and the JS
 | `url` | yes | — | Any Spark UI, proxy, or REST API URL for a SQL execution |
 | `simple_chart` | no | `false` | Suppress `Project` / `Filter` / `Exchange` nodes and colour each scan with a unique per-table colour |
 | `from_explain_text` | no | `false` | Use `PlanTextUMLGenerator` on `planDescription` instead of the nodes/edges REST graph |
-| `driver_ip` | no | `""` | IP of the Spark driver; required when the REST URL resolves to `127.0.0.1` |
 
 **Returns:** JSON object with:
 
@@ -371,6 +355,31 @@ When the REST URL points to `127.0.0.1`, `driver_ip` must be supplied and the JS
 
 ---
 
+### `analyze_eventlog_failures`
+
+**Purpose:** Analyze task failures in a Spark event log and return a markdown report suitable for posting as an issue reply. Reads the raw event log through the Spark Connect session at `sc://127.0.0.1:15002/` (it does not use the Iceberg database tables).
+
+**Parameters:**
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `eventlog` | yes | — | Absolute path of the event log file or directory; must be readable by the Spark Connect server |
+| `max_traces_per_cause` | no | `5` | Max full stack traces printed per root cause; `<= 0` prints all |
+
+**Report sections:**
+
+| Section | Content |
+|---|---|
+| Header | Application ID, Spark version, Gluten commit |
+| Task End Reason Summary | Task count per `Task End Reason` |
+| ExecutorLostFailure | Loss reason breakdown and affected stages (stage, attempt, execution ID, query) |
+| ExceptionFailure | Affected stages, classification by root cause / exception type / error code / operator, and collapsible stack traces |
+| Driver Errors | Failed SQL executions with root cause and first error line |
+
+**Returns:** The markdown report. It is also saved to `output/<appid>/<appid>_failure_analysis.md`, where `appid` is read from the event log.
+
+---
+
 ## Typical Workflow
 
 ```
@@ -392,5 +401,8 @@ When the REST URL points to `127.0.0.1`, `driver_ip` must be supplied and the JS
 
 6. get_shuffle_stat / get_metrics_by_node / get_table_scan_metrics
        → deep-dive into specific operator or I/O metrics
+
+7. analyze_eventlog_failures(eventlog)
+       → markdown report of failed tasks, exceptions and driver errors
 ```
 
