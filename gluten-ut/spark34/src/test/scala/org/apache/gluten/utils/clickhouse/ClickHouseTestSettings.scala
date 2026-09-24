@@ -45,6 +45,7 @@ import org.apache.spark.sql.sources._
 // scalastyle:off line.size.limit
 
 class ClickHouseTestSettings extends BackendTestSettings {
+  import SuiteSettings._
 
   // disable tests that will break the whole UT
   override def shouldRun(suiteName: String, testName: String): Boolean = {
@@ -166,6 +167,13 @@ class ClickHouseTestSettings extends BackendTestSettings {
     .excludeGlutenTest("length check for input string values: with implicit cast")
     .excludeGlutenTest("char/varchar type values length check: partitioned columns of other types")
     .excludeGlutenTest("SPARK-42611: check char/varchar length in reordered structs within arrays")
+    .excludeGlutenTest("length check for input string values: nested in map key")
+    .excludeGlutenTest("length check for input string values: nested in map value")
+    .excludeGlutenTest("length check for input string values: nested in both map key and value")
+    .excludeGlutenTest(
+      "SPARK-42611: check char/varchar length in reordered structs within map keys")
+    .excludeGlutenTest(
+      "SPARK-42611: check char/varchar length in reordered structs within map values")
   enableSuite[GlutenDSV2SQLInsertTestSuite]
   enableSuite[GlutenDataFrameAggregateSuite]
     .exclude("average")
@@ -194,6 +202,7 @@ class ClickHouseTestSettings extends BackendTestSettings {
     // Expected exception org.apache.spark.SparkException to be thrown, but no exception was thrown
     .exclude("map_concat function")
     .exclude("map with arrays")
+    .excludeGlutenTest("map with arrays")
     .exclude("flatten function")
     .exclude("aggregate function - array for primitive type not containing null")
     .exclude("aggregate function - array for primitive type containing null")
@@ -390,6 +399,9 @@ class ClickHouseTestSettings extends BackendTestSettings {
     .excludeGlutenTest("length check for input string values: nested in array of array")
     .excludeGlutenTest("length check for input string values: nested in array of struct")
     .excludeGlutenTest("length check for input string values: nested in array")
+    .excludeGlutenTest("length check for input string values: nested in map key")
+    .excludeGlutenTest("length check for input string values: nested in map value")
+    .excludeGlutenTest("length check for input string values: nested in both map key and value")
   enableSuite[GlutenFileSourceSQLInsertTestSuite]
     .exclude("SPARK-33474: Support typed literals as partition spec values")
     .exclude(
@@ -550,6 +562,9 @@ class ClickHouseTestSettings extends BackendTestSettings {
     .exclude("cast from boolean")
     .exclude("data type casting")
     .excludeGlutenTest("data type casting")
+    // The Gluten rewrite of "cast from timestamp II" is not vetted on ClickHouse;
+    // the vanilla case is excluded separately in this block.
+    .excludeGlutenTest("cast from timestamp II")
     .exclude("cast between string and interval")
     .exclude("SPARK-27671: cast from nested null type in struct")
     .exclude("Process Infinity, -Infinity, NaN in case insensitive manner")
@@ -645,7 +660,6 @@ class ClickHouseTestSettings extends BackendTestSettings {
     .exclude("to_timestamp_ntz")
     .exclude("to_timestamp exception mode")
     .exclude("SPARK-31896: Handle am-pm timestamp parsing when hour is missing")
-    .exclude("DATE_FROM_UNIX_DATE")
     .exclude("UNIX_SECONDS")
     .exclude("TIMESTAMP_SECONDS") // refer to https://github.com/ClickHouse/ClickHouse/issues/69280
     .exclude("TIMESTAMP_MICROS") // refer to https://github.com/apache/gluten/issues/7127
@@ -1715,9 +1729,8 @@ class ClickHouseTestSettings extends BackendTestSettings {
     .exclude("CREATE TABLE USING AS SELECT based on the file without write permission")
     .exclude("create a table, drop it and create another one with the same name")
   enableSuite[GlutenDDLSourceLoadSuite]
-  enableSuite[GlutenDisableUnnecessaryBucketedScanWithoutHiveSupportSuite]
-    .disable(
-      "DISABLED: GLUTEN-4893 Vanilla UT checks scan operator by exactly matching the class type")
+  disableSuite[GlutenDisableUnnecessaryBucketedScanWithoutHiveSupportSuite](
+    "GLUTEN-4893: Vanilla UT checks scan operator by exactly matching the class type")
   enableSuite[GlutenDisableUnnecessaryBucketedScanWithoutHiveSupportSuiteAE]
   enableSuite[GlutenExternalCommandRunnerSuite]
   enableSuite[GlutenFilteredScanSuite]
@@ -1740,6 +1753,7 @@ class ClickHouseTestSettings extends BackendTestSettings {
       "SELECT structFieldSimple.key, arrayFieldSimple[1] FROM tableWithSchema a where int_Field=1")
     .exclude("SELECT structFieldComplex.Value.`value_(2)` FROM tableWithSchema")
   enableSuite[GlutenSparkSessionExtensionSuite]
+    .includeGlutenTest("customColumnarOp")
   enableSuite[GlutenHiveSQLQueryCHSuite]
   enableSuite[GlutenPercentileSuite]
   enableSuite[GlutenTryCastSuite]
