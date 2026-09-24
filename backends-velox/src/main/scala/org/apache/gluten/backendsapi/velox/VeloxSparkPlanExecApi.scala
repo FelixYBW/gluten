@@ -41,7 +41,6 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.expressions.PythonUDTF
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, CollectList, CollectSet}
 import org.apache.spark.sql.catalyst.expressions.objects.{AssertNotNull, StaticInvoke}
 import org.apache.spark.sql.catalyst.optimizer.BuildSide
@@ -53,7 +52,7 @@ import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.joins.{BuildSideRelation, HashedRelationBroadcastMode, SparkHashJoinUtils}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.execution.python.ArrowEvalPythonExec
+import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, ArrowEvalPythonUDTFShim, ColumnarArrowEvalPythonUDTFExec}
 import org.apache.spark.sql.execution.unsafe.UnsafeColumnarBuildSideRelation
 import org.apache.spark.sql.execution.utils.ExecUtil
 import org.apache.spark.sql.expression.{UDFExpression, UDFResolver, UserDefinedAggregateFunction}
@@ -685,13 +684,10 @@ class VeloxSparkPlanExecApi extends SparkPlanExecApi with Logging {
     ColumnarArrowEvalPythonExec(udfs, resultAttrs, child, evalType)
   }
 
-  override def createArrowEvalPythonUDTFTransformer(
-      udtf: PythonUDTF,
-      requiredChildOutput: Seq[Attribute],
-      resultAttrs: Seq[Attribute],
-      child: SparkPlan,
-      evalType: Int): SparkPlan = {
-    ArrowEvalPythonUDTFTransformer(udtf, requiredChildOutput, resultAttrs, child, evalType)
+  override def createColumnarArrowEvalPythonUDTFExec(plan: SparkPlan): SparkPlan = plan match {
+    case ArrowEvalPythonUDTFShim(udtf, requiredChildOutput, resultAttrs, child, evalType) =>
+      ColumnarArrowEvalPythonUDTFExec(udtf, requiredChildOutput, resultAttrs, child, evalType)
+    case other => other
   }
 
   /**

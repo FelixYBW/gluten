@@ -31,7 +31,6 @@ import org.apache.spark.shuffle.{GenShuffleReaderParameters, GenShuffleWriterPar
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.expressions.PythonUDTF
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
 import org.apache.spark.sql.catalyst.expressions.objects.StaticInvoke
 import org.apache.spark.sql.catalyst.optimizer.BuildSide
@@ -472,13 +471,11 @@ trait SparkPlanExecApi {
       child: SparkPlan,
       evalType: Int): SparkPlan
 
-  /** Create ArrowEvalPythonUDTFTransformer for Python UDTF execution */
-  def createArrowEvalPythonUDTFTransformer(
-      udtf: PythonUDTF,
-      requiredChildOutput: Seq[Attribute],
-      resultAttrs: Seq[Attribute],
-      child: SparkPlan,
-      evalType: Int): SparkPlan
+  /**
+   * Create the columnar counterpart of ArrowEvalPythonUDTFExec (Spark 3.5+). Returns the plan
+   * unchanged if not supported by the backend.
+   */
+  def createColumnarArrowEvalPythonUDTFExec(plan: SparkPlan): SparkPlan = plan
 
   def genGetStructFieldTransformer(
       substraitExprName: String,
