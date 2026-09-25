@@ -31,7 +31,6 @@ import org.apache.gluten.substrait.expression.{ExpressionBuilder, ExpressionNode
 import org.apache.gluten.vectorized.{ColumnarBatchSerializer, ColumnarBatchSerializeResult}
 
 import org.apache.spark.{ShuffleDependency, SparkEnv, SparkException}
-import org.apache.spark.api.python.{ColumnarArrowEvalPythonExec, PullOutArrowEvalPythonPreProjectHelper}
 import org.apache.spark.internal.Logging
 import org.apache.spark.memory.SparkMemoryUtil
 import org.apache.spark.rdd.RDD
@@ -52,7 +51,7 @@ import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.joins.{BuildSideRelation, HashedRelationBroadcastMode, SparkHashJoinUtils}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.execution.python.ArrowEvalPythonExec
+import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, ColumnarArrowEvalPythonExec, PullOutArrowEvalPythonPreProjectHelper}
 import org.apache.spark.sql.execution.unsafe.UnsafeColumnarBuildSideRelation
 import org.apache.spark.sql.execution.utils.ExecUtil
 import org.apache.spark.sql.expression.{UDFExpression, UDFResolver, UserDefinedAggregateFunction}
@@ -681,7 +680,11 @@ class VeloxSparkPlanExecApi extends SparkPlanExecApi with Logging {
       resultAttrs: Seq[Attribute],
       child: SparkPlan,
       evalType: Int): SparkPlan = {
-    ColumnarArrowEvalPythonExec(udfs, resultAttrs, child, evalType)
+    if (ColumnarArrowEvalPythonExec.isSupported(udfs, child)) {
+      ColumnarArrowEvalPythonExec(udfs, resultAttrs, child, evalType)
+    } else {
+      ArrowEvalPythonExec(udfs, resultAttrs, child, evalType)
+    }
   }
 
   /**

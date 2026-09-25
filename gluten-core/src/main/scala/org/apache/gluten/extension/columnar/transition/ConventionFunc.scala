@@ -98,6 +98,8 @@ object ConventionFunc {
       val out = plan match {
         case k: Convention.KnownRowType =>
           k.rowType()
+        case _ if SparkConventions.hasCustomRowType(plan) =>
+          SparkConventions.rowTypeOf(plan.convention.rowType)
         case _ if SparkPlanUtil.supportsRowBased(plan) =>
           Convention.RowType.VanillaRowType
         case _ =>
@@ -130,6 +132,8 @@ object ConventionFunc {
       val out = plan match {
         case k: Convention.KnownBatchType =>
           k.batchType()
+        case _ if SparkConventions.hasCustomBatchType(plan) =>
+          SparkConventions.batchTypeOf(plan.convention.batchType)
         case _ if plan.supportsColumnar =>
           Convention.BatchType.VanillaBatchType
         case _ =>
@@ -163,6 +167,9 @@ object ConventionFunc {
       case k: KnownChildConvention =>
         val reqs = k.requiredChildConvention()
         reqs
+      case p if SparkConventions.hasCustomChildReqs(p) =>
+        // A vanilla plan declaring Spark conventions other than vanilla ones (SPARK-57468).
+        SparkConventions.childReqsInGluten(p)
       case RowToColumnarLike(_) =>
         Seq(
           ConventionReq.of(

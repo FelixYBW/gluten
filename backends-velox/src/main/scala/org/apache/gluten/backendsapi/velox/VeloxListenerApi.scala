@@ -17,7 +17,7 @@
 package org.apache.gluten.backendsapi.velox
 
 import org.apache.gluten.backendsapi.ListenerApi
-import org.apache.gluten.backendsapi.arrow.ArrowBatchTypes.{ArrowJavaBatchType, ArrowNativeBatchType}
+import org.apache.gluten.backendsapi.arrow.ArrowBatchTypes.{ArrowJavaBatchType, ArrowNativeBatchType, SparkArrowBatchType}
 import org.apache.gluten.config.{GlutenConfig, GlutenCoreConfig, VeloxConfig}
 import org.apache.gluten.config.VeloxConfig._
 import org.apache.gluten.execution.VeloxBroadcastBuildSideCache
@@ -190,6 +190,7 @@ class VeloxListenerApi extends ListenerApi with Logging {
     Convention.ensureSparkRowAndBatchTypesRegistered()
     ArrowJavaBatchType.ensureRegistered()
     ArrowNativeBatchType.ensureRegistered()
+    SparkArrowBatchType.ensureRegistered()
     VeloxBatchType.ensureRegistered()
     VeloxCarrierRowType.ensureRegistered()
 
