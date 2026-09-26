@@ -14,21 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.util
+package org.apache.gluten.sql.shims.spark42
 
-object SparkVersionUtil {
-  val gteSpark35: Boolean = compareMajorMinorVersion((3, 5)) >= 0
-  val gteSpark40: Boolean = compareMajorMinorVersion((4, 0)) >= 0
-  val gteSpark41: Boolean = compareMajorMinorVersion((4, 1)) >= 0
-  val gteSpark42: Boolean = compareMajorMinorVersion((4, 2)) >= 0
+import org.apache.gluten.sql.shims.SparkShims
 
-  // Returns X. X < 0 if one < other, x == 0 if one == other, x > 0 if one > other.
-  def compareMajorMinorVersion(other: (Int, Int)): Int = {
-    val (major, minor) = VersionUtils.majorMinorVersion(org.apache.spark.SPARK_VERSION)
-    if (major == other._1) {
-      minor - other._2
-    } else {
-      major - other._1
-    }
+class SparkShimProvider extends org.apache.gluten.sql.shims.SparkShimProvider {
+  def createShim: SparkShims = {
+    new Spark42Shims()
   }
 }

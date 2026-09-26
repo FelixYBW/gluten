@@ -20,19 +20,23 @@ import org.apache.spark.SparkException
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.plans.physical.KeyGroupedPartitioning
+import org.apache.spark.sql.catalyst.plans.physical.KeyedPartitioning
 import org.apache.spark.sql.catalyst.util.InternalRowComparableWrapper
 import org.apache.spark.sql.connector.catalog.Table
 import org.apache.spark.sql.connector.catalog.functions.Reducer
 import org.apache.spark.sql.connector.expressions.aggregate.Aggregation
-import org.apache.spark.sql.connector.read.{HasPartitionKey, InputPartition, Scan, SupportsRuntimeV2Filtering}
+import org.apache.spark.sql.connector.read.{HasPartitionKey, InputPartition, Scan}
 import org.apache.spark.sql.execution.datasources.v2.orc.OrcScan
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
-import org.apache.spark.sql.execution.joins.StoragePartitionJoinParams
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.vectorized.ColumnarBatch
-import org.apache.spark.util.ArrayImplicits._
 
+// Spark 4.2 removed `StoragePartitionJoinParams` and no longer accepts the SPJ parameters
+// (`joinKeyPositions`, `commonPartitionValues`, `reducers`, `applyPartialClustering`,
+// `replicatePartitions`) on the scan node -- that grouping/replication now happens in
+// `GroupPartitionsExec`. To keep the public constructor identical to the other Spark shims
+// (Gluten's own planner reads these vals), they are kept here as shim-local fields and are simply
+// not forwarded into the Spark superclass, which now only takes `keyGroupedPartitioning`.
 abstract class BatchScanExecShim(
     output: Seq[AttributeReference],
     @transient scan: Scan,
@@ -51,13 +55,7 @@ abstract class BatchScanExecShim(
     runtimeFilters,
     ordering,
     table,
-    StoragePartitionJoinParams(
-      keyGroupedPartitioning,
-      joinKeyPositions,
-      commonPartitionValues,
-      reducers,
-      applyPartialClustering,
-      replicatePartitions)
+    keyGroupedPartitioning
   ) {
 
   // Note: "metrics" is made transient to avoid sending driver-side metrics to tasks.
@@ -77,9 +75,10 @@ abstract class BatchScanExecShim(
       .exists(v => metadataColumnsNames.contains(v.name))
   }
 
-  // Spark 4.2 changed the signature of `postDriverMetrics`, so the call is shimmed per version.
+  // Spark 4.2 moved `postDriverMetrics` to SupportsCustomDriverMetrics and made the reported
+  // task metrics an explicit argument (see BatchScanExec in Spark 4.2).
   def doPostDriverMetrics(): Unit = {
-    postDriverMetrics()
+    postDriverMetrics(scan.reportDriverMetrics())
   }
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
@@ -87,67 +86,68 @@ abstract class BatchScanExecShim(
   }
 
   @transient protected lazy val filteredPartitions: Seq[Seq[InputPartition]] = {
-    val dataSourceFilters = runtimeFilters.flatMap {
-      case DynamicPruningExpression(e) => DataSourceV2Strategy.translateRuntimeFilterV2(e)
-      case _ => None
-    }
+    val originalPartitioning = outputPartitioning
 
-    if (dataSourceFilters.nonEmpty) {
-      val originalPartitioning = outputPartitioning
+    val filtered = PushDownUtils.pushRuntimeFilters(scan, runtimeFilters, table, output)
+    // call toBatch again to get filtered partitions if any runtime filter was pushed
+    val newPartitions =
+      if (filtered) scan.toBatch.planInputPartitions().toSeq else inputPartitions
 
-      // the cast is safe as runtime filters are only assigned if the scan can be filtered
-      val filterableScan = scan.asInstanceOf[SupportsRuntimeV2Filtering]
-      filterableScan.filter(dataSourceFilters.toArray)
+    originalPartitioning match {
+      case k: KeyedPartitioning =>
+        if (newPartitions.exists(!_.isInstanceOf[HasPartitionKey])) {
+          throw new SparkException(
+            "Data source must have preserved the original partitioning " +
+              "during runtime filtering: not all partitions implement HasPartitionKey after " +
+              "filtering")
+        }
 
-      // call toBatch again to get filtered partitions
-      val newPartitions = scan.toBatch.planInputPartitions()
-
-      originalPartitioning match {
-        case p: KeyGroupedPartitioning =>
-          if (newPartitions.exists(!_.isInstanceOf[HasPartitionKey])) {
-            throw new SparkException(
-              "Data source must have preserved the original partitioning " +
-                "during runtime filtering: not all partitions implement HasPartitionKey after " +
-                "filtering")
-          }
-          val newPartitionValues = newPartitions
+        if (filtered) {
+          // Validate that runtime filtering only removed partition keys, never introduced new ones.
+          val newPartitionKeys = newPartitions
             .map(
               partition =>
                 InternalRowComparableWrapper(
-                  partition.asInstanceOf[HasPartitionKey],
-                  p.expressions))
+                  partition.asInstanceOf[HasPartitionKey].partitionKey(),
+                  k.expressions))
             .toSet
-          val oldPartitionValues = p.partitionValues
-            .map(partition => InternalRowComparableWrapper(partition, p.expressions))
-            .toSet
-          // We require the new number of partition values to be equal or less than the old number
-          // of partition values here. In the case of less than, empty partitions will be added for
-          // those missing values that are not present in the new input partitions.
-          if (oldPartitionValues.size < newPartitionValues.size) {
+          val oldPartitionKeys = k.partitionKeys.toSet
+          // We require the new number of partition keys to be equal or less than the old number.
+          if (oldPartitionKeys.size < newPartitionKeys.size) {
             throw new SparkException(
               "During runtime filtering, data source must either report " +
                 "the same number of partition values, or a subset of partition values from the " +
-                s"original. Before: ${oldPartitionValues.size} partition values. " +
-                s"After: ${newPartitionValues.size} partition values")
+                s"original. Before: ${oldPartitionKeys.size} partition values. " +
+                s"After: ${newPartitionKeys.size} partition values")
           }
-
-          if (!newPartitionValues.forall(oldPartitionValues.contains)) {
+          if (!newPartitionKeys.forall(oldPartitionKeys.contains)) {
             throw new SparkException(
               "During runtime filtering, data source must not report new " +
                 "partition values that are not present in the original partitioning.")
           }
+        }
 
-          groupPartitions(newPartitions.toImmutableArraySeq)
-            .map(_.groupedParts.map(_.parts))
-            .getOrElse(Seq.empty)
+        // Group the splits that share the same partition key and sort the groups by key ascending.
+        // This reproduces the key-grouped layout Spark 4.1's `BatchScanExec` produced and that
+        // Gluten's native `SparkShims.orderPartitions` still expects.
+        //
+        // FIXME(Spark 4.2, apache/gluten#13139): this collapsing is incorrect for Spark 4.2, which
+        // keeps splits ungrouped and defers grouping to `GroupPartitionsExec` -- e.g. keys
+        // [A, A, B] advertise 3 partitions but build only 2, so `GroupPartitionsExec` requests an
+        // index the reduced RDD lacks. It is currently unreachable (only `KeyGroupedPartitioning`
+        // /SPJ sources hit it, and no such source -- e.g. Iceberg -- is enabled on Spark 4.2), so
+        // it is dormant today. It must be reworked before native keyed DSv2 is enabled on 4.2; see
+        // the issue for the two fix options.
+        newPartitions
+          .map(part => (part.asInstanceOf[HasPartitionKey].partitionKey(), part))
+          .groupBy { case (key, _) => InternalRowComparableWrapper(key, k.expressions) }
+          .toSeq
+          .sortBy(_._1)(k.keyOrdering)
+          .map { case (_, keyedParts) => keyedParts.map(_._2) }
 
-        case _ =>
-          // no validation is needed as the data source did not report any specific partitioning
-          newPartitions.map(Seq(_))
-      }
-
-    } else {
-      partitions
+      case _ =>
+        // no validation is needed as the data source did not report any specific partitioning
+        newPartitions.map(Seq(_))
     }
   }
 

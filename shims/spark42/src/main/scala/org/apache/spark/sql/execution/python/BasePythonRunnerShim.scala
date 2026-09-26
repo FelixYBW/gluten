@@ -21,6 +21,7 @@ import org.apache.spark.TaskContext
 import org.apache.spark.api.python.{BasePythonRunner, ChainedPythonFunctions, PythonWorker}
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.execution.python.EvalPythonExec.ArgumentMetadata
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import java.io.DataOutputStream
@@ -50,8 +51,7 @@ abstract class BasePythonRunnerShim(
     PythonUDFRunner.writeUDFs(
       dataOut,
       funcs,
-      argOffsets.map(_.map(pair => ArgumentMetadata(pair._1, pair._2))),
-      None)
+      argOffsets.map(_.map(pair => ArgumentMetadata(pair._1, pair._2))))
   }
 
   override protected def newWriter(
@@ -62,5 +62,26 @@ abstract class BasePythonRunnerShim(
       context: TaskContext): Writer = {
     createNewWriter(env, worker, inputIterator, partitionIndex, context)
   }
+
+  // Spark 4.2 (SPARK-51384) frames the Python worker command as
+  // evalType -> runnerConf -> evalConf -> writeCommand, and expects writeCommand to emit only the
+  // UDF definitions. Older profiles hand-wrote the config prefix inside writeCommand; on Spark 4.2
+  // that config must instead flow through these hooks (mirroring Spark's own ArrowPythonRunner /
+  // ArrowPythonWithNamedArgumentRunner), otherwise the worker misreads the extra prefix.
+  // The concrete runner supplies the values via pythonRunnerConfMap / pythonInputSchema.
+  private val SQL_ARROW_BATCHED_UDF = 101
+
+  protected def pythonRunnerConfMap: Map[String, String] = Map.empty
+
+  protected def pythonInputSchema: StructType = new StructType()
+
+  override def runnerConf: Map[String, String] = super.runnerConf ++ pythonRunnerConfMap
+
+  override def evalConf: Map[String, String] =
+    if (evalType == SQL_ARROW_BATCHED_UDF) {
+      super.evalConf + ("input_type" -> pythonInputSchema.json)
+    } else {
+      super.evalConf
+    }
 
 }

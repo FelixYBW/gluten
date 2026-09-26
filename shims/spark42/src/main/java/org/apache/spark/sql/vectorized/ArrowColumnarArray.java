@@ -16,8 +16,7 @@
  */
 package org.apache.spark.sql.vectorized;
 
-import org.apache.spark.unsafe.types.GeographyVal;
-import org.apache.spark.unsafe.types.GeometryVal;
+import org.apache.spark.unsafe.types.BinaryView;
 import org.apache.spark.unsafe.types.VariantVal;
 
 public final class ArrowColumnarArray extends AbstractColumnarArray {
@@ -32,12 +31,7 @@ public final class ArrowColumnarArray extends AbstractColumnarArray {
   }
 
   @Override
-  public GeographyVal getGeography(int ordinal) {
-    return data.getGeography(offset + ordinal);
-  }
-
-  @Override
-  public GeometryVal getGeometry(int ordinal) {
-    return data.getGeometry(offset + ordinal);
+  public BinaryView getBinaryView(int ordinal) {
+    return data.getBinaryView(offset + ordinal);
   }
 }

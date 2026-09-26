@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.gluten.sql.shims.spark41
+package org.apache.gluten.sql.shims.spark42
 
 import org.apache.gluten.execution.PartitionedFileUtilShim
 import org.apache.gluten.expression.{ExpressionNames, Sig}
 import org.apache.gluten.sql.shims.SparkShims
-import org.apache.gluten.utils.ExceptionUtils
 
 import org.apache.spark._
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -29,7 +28,8 @@ import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.plans.{JoinType, LeftSingle}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.plans.physical.{KeyGroupedPartitioning, KeyGroupedShuffleSpec, Partitioning}
+import org.apache.spark.sql.catalyst.plans.physical.{KeyedPartitioning, Partitioning}
+import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.{CollationFactory, InternalRowComparableWrapper, MapData}
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.connector.read.{HasPartitionKey, InputPartition, Scan}
@@ -37,7 +37,7 @@ import org.apache.spark.sql.connector.read.streaming.SparkDataStream
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters}
-import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, BatchScanExecShim, DataSourceV2ScanExecBase}
+import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2ScanExecBase}
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeLike, ShuffleExchangeLike}
 import org.apache.spark.sql.execution.window.{Final, Partial, _}
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
@@ -53,12 +53,12 @@ import java.util.{Map => JMap}
 
 import scala.jdk.CollectionConverters._
 
-class Spark41Shims extends SparkShims {
+class Spark42Shims extends SparkShims {
 
-  override def getSampleSeed(plan: SampleExec): Long = plan.seed
+  override def getSampleSeed(plan: SampleExec): Long = plan.resolvedSeed
 
   override def isKeyGroupedPartitioning(partitioning: Partitioning): Boolean =
-    partitioning.isInstanceOf[KeyGroupedPartitioning]
+    partitioning.isInstanceOf[KeyedPartitioning]
 
   override def getLocalTableScanStream(plan: LocalTableScanExec): Option[SparkDataStream] =
     plan.stream
@@ -111,8 +111,16 @@ class Spark41Shims extends SparkShims {
         f =>
           BucketingUtils
             .getBucketId(f.toPath.getName)
-            .getOrElse(throw ExceptionUtils.invalidBucketFile(f.urlEncodedPath))
+            .getOrElse(throw invalidBucketFile(f.urlEncodedPath))
       }
+  }
+
+  // https://issues.apache.org/jira/browse/SPARK-40400
+  private def invalidBucketFile(path: String): Throwable = {
+    new SparkException(
+      errorClass = "INVALID_BUCKET_FILE",
+      messageParameters = Map("path" -> path),
+      cause = null)
   }
 
   override def isWindowGroupLimitExec(plan: SparkPlan): Boolean = plan match {
@@ -221,6 +229,14 @@ class Spark41Shims extends SparkShims {
       partitionValues)
   }
 
+  def structFromAttributes(attrs: Seq[Attribute]): StructType = {
+    DataTypeUtils.fromAttributes(attrs)
+  }
+
+  def attributesFromStruct(structType: StructType): Seq[Attribute] = {
+    DataTypeUtils.toAttributes(structType)
+  }
+
   def getAnalysisExceptionPlan(ae: AnalysisException): Option[LogicalPlan] = {
     ae match {
       case eae: ExtendedAnalysisException =>
@@ -231,7 +247,14 @@ class Spark41Shims extends SparkShims {
   }
   override def getCommonPartitionValues(
       batchScan: BatchScanExec): Option[Seq[(InternalRow, Int)]] = {
-    batchScan.spjParams.commonPartitionValues
+    // Spark 4.2 removed `StoragePartitionJoinParams` (and `BatchScanExec.spjParams`), so the
+    // "common partition values" that a partially-clustered storage-partitioned join used to expose
+    // on the scan node are no longer available here -- Spark 4.2 computes and applies them in
+    // `EnsureRequirements`/`GroupPartitionsExec` instead. There is no equivalent accessor on the
+    // 4.2 `BatchScanExec`, so we conservatively return `None`, which simply disables the
+    // partially-clustered-distribution refinement in Gluten's own scan planner (DEGRADED: see the
+    // note in `orderPartitions`). This does not affect the base (fully-clustered) SPJ path.
+    None
   }
 
   // please ref BatchScanExec::inputRDD
@@ -245,120 +268,43 @@ class Spark41Shims extends SparkShims {
       applyPartialClustering: Boolean,
       replicatePartitions: Boolean,
       joinKeyPositions: Option[Seq[Int]] = None): Seq[Seq[InputPartition]] = {
-    val original = batchScan.asInstanceOf[BatchScanExecShim]
     scan match {
       case _ if keyGroupedPartitioning.isDefined =>
         outputPartitioning match {
-          case p: KeyGroupedPartitioning =>
-            assert(keyGroupedPartitioning.isDefined)
-            val expressions = keyGroupedPartitioning.get
+          case p: KeyedPartitioning =>
+            val partExpressions = keyGroupedPartitioning.get
 
-            // Re-group the input partitions if we are projecting on a subset of join keys
-            val (groupedPartitions, partExpressions) = joinKeyPositions match {
-              case Some(projectPositions) =>
-                val projectedExpressions = projectPositions.map(i => expressions(i))
-                val parts = filteredPartitions.flatten
-                  .groupBy(
-                    part => {
-                      val row = part.asInstanceOf[HasPartitionKey].partitionKey()
-                      val projectedRow =
-                        KeyGroupedPartitioning.project(expressions, projectPositions, row)
-                      InternalRowComparableWrapper(projectedRow, projectedExpressions)
-                    })
-                  .map { case (wrapper, splits) => (wrapper.row, splits) }
-                  .toSeq
-                (parts, projectedExpressions)
-              case _ =>
-                val groupedParts = filteredPartitions.map(
-                  splits => {
-                    assert(splits.nonEmpty && splits.head.isInstanceOf[HasPartitionKey])
-                    (splits.head.asInstanceOf[HasPartitionKey].partitionKey(), splits)
-                  })
-                (groupedParts, expressions)
+            // DEGRADED (Spark 4.2 port): Spark 4.2 removed `KeyGroupedPartitioning` and
+            // `StoragePartitionJoinParams`, and moved the storage-partitioned-join refinements that
+            // used to run here into `EnsureRequirements`/`GroupPartitionsExec`:
+            //   - subset-of-join-keys projection (`joinKeyPositions`),
+            //   - compatible partition-expression reduction (`reducers`),
+            //   - partially-clustered replication (`commonPartitionValues` /
+            //     `applyPartialClustering` / `replicatePartitions`).
+            // Gluten never populates `joinKeyPositions`/`reducers`, and `getCommonPartitionValues`
+            // returns `None` on 4.2, so `commonPartitionValues` is always empty here. These
+            // parameters therefore have no 4.2 equivalent that can be reproduced on the scan node
+            // and are intentionally NOT applied; only the base key-grouped ordering is reproduced.
+            // The base (fully-clustered) SPJ path is unaffected.
+            val groupedPartitions = filteredPartitions.map {
+              splits =>
+                assert(splits.nonEmpty && splits.head.isInstanceOf[HasPartitionKey])
+                (splits.head.asInstanceOf[HasPartitionKey].partitionKey(), splits)
             }
 
-            // Also re-group the partitions if we are reducing compatible partition expressions
-            val finalGroupedPartitions = original.reducers match {
-              case Some(reducers) =>
-                val result = groupedPartitions
-                  .groupBy {
-                    case (row, _) =>
-                      KeyGroupedShuffleSpec.reducePartitionValue(row, partExpressions, reducers)
-                  }
-                  .map { case (wrapper, splits) => (wrapper.row, splits.flatMap(_._2)) }
-                  .toSeq
-                val rowOrdering =
-                  RowOrdering.createNaturalAscendingOrdering(partExpressions.map(_.dataType))
-                result.sorted(rowOrdering.on((t: (InternalRow, _)) => t._1))
-              case _ => groupedPartitions
-            }
+            val partitionMapping = groupedPartitions.map {
+              case (partValue, splits) =>
+                InternalRowComparableWrapper(partValue, partExpressions) -> splits
+            }.toMap
 
-            // When partially clustered, the input partitions are not grouped by partition
-            // values. Here we'll need to check `commonPartitionValues` and decide how to group
-            // and replicate splits within a partition.
-            if (commonPartitionValues.isDefined && applyPartialClustering) {
-              // A mapping from the common partition values to how many splits the partition
-              // should contain.
-              val commonPartValuesMap = commonPartitionValues.get
-                .map(t => (InternalRowComparableWrapper(t._1, partExpressions), t._2))
-                .toMap
-              val filteredGroupedPartitions = finalGroupedPartitions.filter {
-                case (partValues, _) =>
-                  commonPartValuesMap.keySet.contains(
-                    InternalRowComparableWrapper(partValues, partExpressions))
-              }
-              val nestGroupedPartitions = filteredGroupedPartitions.map {
-                case (partValue, splits) =>
-                  // `commonPartValuesMap` should contain the part value since it's the super set.
-                  val numSplits = commonPartValuesMap
-                    .get(InternalRowComparableWrapper(partValue, partExpressions))
-                  assert(
-                    numSplits.isDefined,
-                    s"Partition value $partValue does not exist in " +
-                      "common partition values from Spark plan")
-
-                  val newSplits = if (replicatePartitions) {
-                    // We need to also replicate partitions according to the other side of join
-                    Seq.fill(numSplits.get)(splits)
-                  } else {
-                    // Not grouping by partition values: this could be the side with partially
-                    // clustered distribution. Because of dynamic filtering, we'll need to check if
-                    // the final number of splits of a partition is smaller than the original
-                    // number, and fill with empty splits if so. This is necessary so that both
-                    // sides of a join will have the same number of partitions & splits.
-                    splits.map(Seq(_)).padTo(numSplits.get, Seq.empty)
-                  }
-                  (InternalRowComparableWrapper(partValue, partExpressions), newSplits)
-              }
-
-              // Now fill missing partition keys with empty partitions
-              val partitionMapping = nestGroupedPartitions.toMap
-              commonPartitionValues.get.flatMap {
-                case (partValue, numSplits) =>
-                  // Use empty partition for those partition values that are not present.
-                  partitionMapping.getOrElse(
-                    InternalRowComparableWrapper(partValue, partExpressions),
-                    Seq.fill(numSplits)(Seq.empty))
-              }
-            } else {
-              // either `commonPartitionValues` is not defined, or it is defined but
-              // `applyPartialClustering` is false.
-              val partitionMapping = finalGroupedPartitions.map {
-                case (partValue, splits) =>
-                  InternalRowComparableWrapper(partValue, partExpressions) -> splits
-              }.toMap
-
-              // In case `commonPartitionValues` is not defined (e.g., SPJ is not used), there
-              // could exist duplicated partition values, as partition grouping is not done
-              // at the beginning and postponed to this method. It is important to use unique
-              // partition values here so that grouped partitions won't get duplicated.
-              p.uniquePartitionValues.map {
-                partValue =>
-                  // Use empty partition for those partition values that are not present
-                  partitionMapping.getOrElse(
-                    InternalRowComparableWrapper(partValue, partExpressions),
-                    Seq.empty)
-              }
+            // Use the unique, sorted partition keys as the canonical partition order (Spark 4.2's
+            // `KeyedPartitioning.toGrouped` returns distinct keys sorted ascending), filling absent
+            // keys with empty split groups so both sides of a storage-partitioned join stay
+            // aligned. This mirrors the old `KeyGroupedPartitioning.uniquePartitionValues` path.
+            p.toGrouped.partitionKeys.map {
+              keyWrapper =>
+                // Use empty partition for those partition values that are not present
+                partitionMapping.getOrElse(keyWrapper, Seq.empty)
             }
 
           case _ => filteredPartitions

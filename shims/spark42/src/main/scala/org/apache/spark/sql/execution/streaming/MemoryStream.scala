@@ -27,6 +27,6 @@ object MemoryStream {
   def apply[A: Encoder](
       numPartitions: Int)(
       implicit sqlContext: SQLContext): RuntimeMemoryStream[A] = {
-    RuntimeMemoryStream[A](numPartitions)(implicitly[Encoder[A]], sqlContext.sparkSession)
+    RuntimeMemoryStream[A](sqlContext.sparkSession, numPartitions)
   }
 }

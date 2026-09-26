@@ -14,12 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.gluten.sql.shims.spark41
+package org.apache.spark.sql.catalyst.expressions
 
-import org.apache.gluten.sql.shims.SparkShims
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
+import org.apache.spark.sql.types._
 
-class SparkShimProvider extends org.apache.gluten.sql.shims.SparkShimProvider {
-  def createShim: SparkShims = {
-    new Spark41Shims()
-  }
+case class PromotePrecision(child: Expression) extends UnaryExpression {
+  override def dataType: DataType = child.dataType
+  override def eval(input: InternalRow): Any = child.eval(input)
+  override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode =
+    child.genCode(ctx)
+  override def prettyName: String = "promote_precision"
+  override def sql: String = child.sql
+  override lazy val canonicalized: Expression = child.canonicalized
+
+  override protected def withNewChildInternal(newChild: Expression): Expression =
+    copy(child = newChild)
 }

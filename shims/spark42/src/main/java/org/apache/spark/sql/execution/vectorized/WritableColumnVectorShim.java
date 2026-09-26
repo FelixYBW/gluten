@@ -17,13 +17,14 @@
 package org.apache.spark.sql.execution.vectorized;
 
 import org.apache.spark.sql.types.DataType;
+import org.apache.spark.unsafe.types.BinaryView;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.nio.ByteBuffer;
 
 /**
- * A no-op WritableColumnVector that exists only to implement the abstract methods. Their set
- * differs between Spark versions, hence one copy of this class per shim module.
+ * because spark33 add new function abstract method 'putBooleans(int, byte)' in
+ * 'WritableColumnVector' And function getByteBuffer()
  */
 public class WritableColumnVectorShim extends WritableColumnVector {
   /**
@@ -79,6 +80,9 @@ public class WritableColumnVectorShim extends WritableColumnVector {
   public void putBytes(int rowId, int count, byte[] src, int srcIndex) {}
 
   @Override
+  public void putBytes(int rowId, int count, ByteBuffer src, int srcIndex) {}
+
+  @Override
   public void putShort(int rowId, short value) {}
 
   @Override
@@ -89,6 +93,9 @@ public class WritableColumnVectorShim extends WritableColumnVector {
 
   @Override
   public void putShorts(int rowId, int count, byte[] src, int srcIndex) {}
+
+  @Override
+  public void putShortsFromIntsLittleEndian(int rowId, int count, byte[] src, int srcIndex) {}
 
   @Override
   public void putInt(int rowId, int value) {}
@@ -160,6 +167,11 @@ public class WritableColumnVectorShim extends WritableColumnVector {
 
   @Override
   protected UTF8String getBytesAsUTF8String(int rowId, int count) {
+    return null;
+  }
+
+  @Override
+  protected BinaryView getBytesAsBinaryView(int rowId, int count) {
     return null;
   }
 
