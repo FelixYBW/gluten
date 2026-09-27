@@ -16,7 +16,7 @@
  */
 package org.apache.gluten.backendsapi.arrow
 
-import org.apache.gluten.execution.{ArrowJavaToSparkArrowExec, LoadArrowDataExec, OffloadArrowDataExec, SparkArrowToArrowJavaExec}
+import org.apache.gluten.execution.{LoadArrowDataExec, OffloadArrowDataExec}
 import org.apache.gluten.extension.columnar.transition.{Convention, SparkConventions, Transition}
 import org.apache.gluten.extension.columnar.transition.Convention.BatchType.VanillaBatchType
 
@@ -27,15 +27,20 @@ object ArrowBatchTypes {
   /**
    * ArrowJavaBatch stands for Gluten's Java Arrow-based columnar batch implementation.
    *
-   * ArrowJavaBatch should have [[org.apache.gluten.vectorized.ArrowWritableColumnVector]]s
-   * populated in it. ArrowJavaBatch can be offloaded to ArrowNativeBatch through API in
+   * ArrowJavaBatch should have [[org.apache.gluten.vectorized.RefCountedArrowColumnVector]]s
+   * (Spark's `ArrowColumnVector` with a reference count) populated in it. ArrowJavaBatch can be
+   * offloaded to ArrowNativeBatch through API in
    * [[org.apache.gluten.columnarbatch.ColumnarBatches]].
+   *
+   * It is bound to Spark's `ArrowBatchType` (SPARK-57468): a Spark operator declaring
+   * `ArrowBatchType` is planned by Gluten as an ArrowJavaBatch operator.
    *
    * ArrowJavaBatch is compatible with vanilla batch since it provides valid #get<type>(...)
    * implementations.
    */
   object ArrowJavaBatchType extends Convention.BatchType {
     override protected def registerTransitions(): Unit = {
+      SparkConventions.bind(SparkBatchType.ArrowBatchType, this)
       toBatch(VanillaBatchType, Transition.empty)
     }
   }
@@ -51,24 +56,6 @@ object ArrowBatchTypes {
     override protected def registerTransitions(): Unit = {
       fromBatch(ArrowJavaBatchType, OffloadArrowDataExec.apply)
       toBatch(ArrowJavaBatchType, LoadArrowDataExec.apply)
-    }
-  }
-
-  /**
-   * SparkArrowBatch is Spark's `ArrowBatchType` (SPARK-57468): a batch of Spark
-   * [[org.apache.spark.sql.vectorized.ArrowColumnVector]]s, valid until the next batch is
-   * requested.
-   *
-   * It is bound to Spark's type, so any Spark operator declaring `ArrowBatchType` as its output or
-   * input convention is planned by Gluten with the transitions below, without operator-specific
-   * code.
-   */
-  object SparkArrowBatchType extends Convention.BatchType {
-    override protected def registerTransitions(): Unit = {
-      SparkConventions.bind(SparkBatchType.ArrowBatchType, this)
-      fromBatch(ArrowJavaBatchType, ArrowJavaToSparkArrowExec.apply)
-      toBatch(ArrowJavaBatchType, SparkArrowToArrowJavaExec.apply)
-      toBatch(VanillaBatchType, Transition.empty)
     }
   }
 }

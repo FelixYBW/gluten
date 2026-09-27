@@ -17,7 +17,7 @@
 package org.apache.gluten.execution.python
 
 import org.apache.gluten.config.GlutenConfig
-import org.apache.gluten.execution.{ArrowJavaToSparkArrowExec, SparkArrowToArrowJavaExec, WholeStageTransformerSuite}
+import org.apache.gluten.execution.{LoadArrowDataExec, OffloadArrowDataExec, WholeStageTransformerSuite}
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.IntegratedUDFTestUtils
@@ -137,8 +137,16 @@ class ArrowEvalPythonExecSuite extends WholeStageTransformerSuite {
       val df = query()
       checkAnswer(df, expected)
       checkSparkPlan[ColumnarArrowEvalPythonExec](df)
-      checkSparkPlan[ArrowJavaToSparkArrowExec](df)
-      checkSparkPlan[SparkArrowToArrowJavaExec](df)
+      // ArrowJavaBatchType is Spark's ArrowBatchType: no transition other than loading and
+      // offloading Arrow data is needed around the UDF.
+      val plan = getExecutedPlan(df)
+      val udfs = plan.collect { case p: ColumnarArrowEvalPythonExec => p }
+      assert(udfs.size == 2, plan)
+      assert(udfs.forall(_.child.isInstanceOf[LoadArrowDataExec]), plan)
+      val offloadedUdfs = plan.collect {
+        case p: OffloadArrowDataExec if p.child.isInstanceOf[ColumnarArrowEvalPythonExec] => p
+      }
+      assert(offloadedUdfs.size == 2, plan)
     }
   }
 
