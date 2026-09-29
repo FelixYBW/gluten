@@ -19,25 +19,16 @@ package org.apache.spark.sql.execution.python
 import org.apache.gluten.utils.PullOutProjectHelper
 
 import org.apache.spark.{ContextAwareIterator, JobArtifactSet, SparkException, TaskContext}
-import org.apache.spark.api.python.{BasePythonRunner, ChainedPythonFunctions}
+import org.apache.spark.api.python.ChainedPythonFunctions
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.execution.{ProjectExec, SparkPlan, UnaryExecNode}
 import org.apache.spark.sql.execution.convention.{BatchType, Convention, ConventionReq, RowType}
-import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.execution.python.EvalPythonExec.ArgumentMetadata
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DataType, StructField, StructType, UserDefinedType}
 import org.apache.spark.sql.types.DataType.equalsIgnoreCompatibleCollation
 import org.apache.spark.sql.vectorized.{ArrowColumnVector, ColumnarBatch, ColumnVector}
-
-import org.apache.arrow.vector.{FieldVector, VectorSchemaRoot, VectorUnloader}
-import org.apache.arrow.vector.ipc.{ArrowStreamWriter, WriteChannel}
-import org.apache.arrow.vector.ipc.message.MessageSerializer
-
-import java.io.DataOutputStream
-import java.nio.channels.Channels
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -50,7 +41,8 @@ import scala.jdk.CollectionConverters._
  * It only uses Spark APIs: it consumes and produces `BatchType.ArrowBatchType` (SPARK-57468), and
  * the plugin inserts the transitions from / to its own columnar format around it.
  *
- *   - The UDF input columns are serialized to the Python worker directly from their Arrow vectors.
+ *   - The UDF input columns are serialized to the Python worker directly from their Arrow vectors,
+ *     by Spark's columnar Arrow Python runner.
  *   - All input columns are kept, zero-copy, until the corresponding Python output arrives, then
  *     emitted together with the UDF result columns. An output batch is valid until the next one is
  *     requested.
@@ -64,6 +56,12 @@ case class ColumnarArrowEvalPythonExec(
   with PythonSQLMetrics {
 
   private[this] val jobArtifactUUID = JobArtifactSet.getCurrentJobArtifactState.map(_.uuid)
+  private[this] val sessionUUID = {
+    Option(session).collect {
+      case session if session.sessionState.conf.pythonWorkerLoggingEnabled =>
+        session.sessionUUID
+    }
+  }
 
   override def output: Seq[Attribute] = child.output ++ resultAttrs
 
@@ -112,9 +110,9 @@ case class ColumnarArrowEvalPythonExec(
     val sessionLocalTimeZone = conf.sessionLocalTimeZone
     val largeVarTypes = conf.arrowUseLargeVarTypes
     val runnerConf = ArrowPythonRunner.getPythonRunnerConfMap(conf)
-    val profiler = conf.pythonUDFProfiler
     val pythonMetrics = this.pythonMetrics
     val jobArtifactUUID = this.jobArtifactUUID
+    val sessionUUID = this.sessionUUID
 
     child.executeColumnar().mapPartitionsInternal {
       iter =>
@@ -135,9 +133,11 @@ case class ColumnarArrowEvalPythonExec(
           batch =>
             val owned = ColumnarArrowEvalPythonExec.takeOwnership(batch)
             pending.add(owned)
-            new ColumnarBatch(inputOrdinals.map(owned.column), owned.numRows)
+            owned
         }
-        val runner = new ColumnarArrowPythonRunner(
+        // Spark's columnar Arrow runner (SPARK-56350) serializes the UDF input columns of
+        // Arrow-backed batches as they are.
+        val runner = new ColumnarArrowPythonWithNamedArgumentRunner(
           pyFuncs,
           evalType,
           argMetas,
@@ -147,7 +147,8 @@ case class ColumnarArrowEvalPythonExec(
           runnerConf,
           pythonMetrics,
           jobArtifactUUID,
-          profiler)
+          sessionUUID,
+          inputOrdinals)
         runner.compute(udfInput, context.partitionId(), context).map {
           result =>
             val actualTypes = (0 until result.numCols).map(result.column(_).dataType)
@@ -218,84 +219,6 @@ object ColumnarArrowEvalPythonExec {
         new ArrowColumnVector(pair.getTo).asInstanceOf[ColumnVector]
     }
     new ColumnarBatch(columns.toArray, batch.numRows)
-  }
-}
-
-/**
- * A Python runner whose input is Arrow-backed [[ColumnarBatch]]es with the UDF input columns. The
- * Arrow vectors are serialized to the worker as they are, instead of being converted row by row
- * with `ArrowWriter` like in [[ArrowPythonWithNamedArgumentRunner]].
- */
-class ColumnarArrowPythonRunner(
-    funcs: Seq[(ChainedPythonFunctions, Long)],
-    evalType: Int,
-    argMetas: Array[Array[ArgumentMetadata]],
-    _schema: StructType,
-    _timeZoneId: String,
-    override protected val largeVarTypes: Boolean,
-    override protected val workerConf: Map[String, String],
-    override val pythonMetrics: Map[String, SQLMetric],
-    jobArtifactUUID: Option[String],
-    profiler: Option[String])
-  extends BasePythonRunner[ColumnarBatch, ColumnarBatch](
-    funcs.map(_._1),
-    evalType,
-    argMetas.map(_.map(_.offset)),
-    jobArtifactUUID,
-    pythonMetrics)
-  with PythonArrowInput[ColumnarBatch]
-  with BasicPythonArrowOutput {
-
-  override val pythonExec: String =
-    SQLConf.get.pysparkWorkerPythonExecutable.getOrElse(funcs.head._1.funcs.head.pythonExec)
-
-  override val faultHandlerEnabled: Boolean = SQLConf.get.pythonUDFWorkerFaulthandlerEnabled
-  override val idleTimeoutSeconds: Long = SQLConf.get.pythonUDFWorkerIdleTimeoutSeconds
-  override val errorOnDuplicatedFieldNames: Boolean = true
-  override val hideTraceback: Boolean = SQLConf.get.pysparkHideTraceback
-  override val simplifiedTraceback: Boolean = SQLConf.get.pysparkSimplifiedTraceback
-
-  // Lazy, to be initialized before they are accessed in PythonArrowInput's constructor.
-  override protected lazy val timeZoneId: String = _timeZoneId
-  override protected lazy val schema: StructType = _schema
-
-  override val bufferSize: Int = SQLConf.get.pandasUDFBufferSize
-  require(
-    bufferSize >= 4,
-    "Pandas execution requires more than 4 bytes. Please set higher buffer. " +
-      s"Please change '${SQLConf.PANDAS_UDF_BUFFER_SIZE.key}'.")
-
-  override protected def writeUDF(dataOut: DataOutputStream): Unit =
-    PythonUDFRunner.writeUDFs(dataOut, funcs, argMetas, profiler)
-
-  override protected def writeNextBatchToArrowStream(
-      root: VectorSchemaRoot,
-      writer: ArrowStreamWriter,
-      dataOut: DataOutputStream,
-      inputIterator: Iterator[ColumnarBatch]): Boolean = {
-    if (inputIterator.hasNext) {
-      val batch = inputIterator.next()
-      val startData = dataOut.size()
-      // The schema was written by `writer` from `root`. The vectors can't be loaded into `root`:
-      // Arrow buffers can't be shared across allocator roots. Serialize them directly instead.
-      val vectors = (0 until batch.numCols).map {
-        i =>
-          batch.column(i).asInstanceOf[ArrowColumnVector].getValueVector.asInstanceOf[FieldVector]
-      }
-      val batchRoot = new VectorSchemaRoot(vectors.asJava)
-      batchRoot.setRowCount(batch.numRows)
-      val recordBatch = new VectorUnloader(batchRoot).getRecordBatch
-      try {
-        MessageSerializer.serialize(new WriteChannel(Channels.newChannel(dataOut)), recordBatch)
-      } finally {
-        recordBatch.close()
-      }
-      pythonMetrics("pythonDataSent") += dataOut.size() - startData
-      true
-    } else {
-      super[PythonArrowInput].close()
-      false
-    }
   }
 }
 
