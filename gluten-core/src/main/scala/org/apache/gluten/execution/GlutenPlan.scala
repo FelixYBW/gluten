@@ -16,9 +16,10 @@
  */
 package org.apache.gluten.execution
 
-import org.apache.gluten.extension.columnar.transition.{Convention, ConventionReq}
+import org.apache.gluten.extension.columnar.transition.{Convention, ConventionReq, SparkConventions}
 
 import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.convention.{Convention => SparkConvention, ConventionReq => SparkConventionReq}
 
 /**
  * Base interface for Query plan that defined by backends.
@@ -58,6 +59,19 @@ trait GlutenPlan
   override def batchType(): Convention.BatchType
 
   override def rowType(): Convention.RowType
+
+  /**
+   * The convention reported to Spark (SPARK-57468), for Spark operators planned on top of this
+   * plan: see [[SparkConventions.sparkConventionOf]]. Gluten's planning uses `rowType` /
+   * `batchType`.
+   */
+  final override def convention: SparkConvention =
+    SparkConventions.sparkConventionOf(rowType(), batchType())
+
+  /** Transitions between a Gluten plan and its children are planned by Gluten, not Spark. */
+  final override def requiredChildConventions(
+      outputsColumnar: Boolean): Seq[SparkConventionReq] =
+    children.map(_ => SparkConventionReq.Any)
 
   override def requiredChildConvention(): Seq[ConventionReq] = {
     val childReq =

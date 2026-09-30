@@ -51,7 +51,7 @@ import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.joins.{BuildSideRelation, HashedRelationBroadcastMode, SparkHashJoinUtils}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, ColumnarArrowEvalPythonExec, PullOutArrowEvalPythonPreProjectHelper}
+import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, PullOutArrowEvalPythonPreProjectHelper}
 import org.apache.spark.sql.execution.unsafe.UnsafeColumnarBuildSideRelation
 import org.apache.spark.sql.execution.utils.ExecUtil
 import org.apache.spark.sql.expression.{UDFExpression, UDFResolver, UserDefinedAggregateFunction}
@@ -675,16 +675,16 @@ class VeloxSparkPlanExecApi extends SparkPlanExecApi with Logging {
       staticPartitions)
   }
 
+  /**
+   * Spark evaluates the UDFs on the Arrow data of Velox, see
+   * [[org.apache.gluten.extension.InsertArrowInputForArrowEvalPython]].
+   */
   override def createColumnarArrowEvalPythonExec(
       udfs: Seq[PythonUDF],
       resultAttrs: Seq[Attribute],
       child: SparkPlan,
       evalType: Int): SparkPlan = {
-    if (ColumnarArrowEvalPythonExec.isSupported(udfs, child)) {
-      ColumnarArrowEvalPythonExec(udfs, resultAttrs, child, evalType)
-    } else {
-      ArrowEvalPythonExec(udfs, resultAttrs, child, evalType)
-    }
+    ArrowEvalPythonExec(udfs, resultAttrs, child, evalType)
   }
 
   /**

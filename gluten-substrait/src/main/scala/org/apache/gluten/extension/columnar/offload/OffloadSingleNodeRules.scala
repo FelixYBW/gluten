@@ -298,7 +298,7 @@ object OffloadOthers {
         case plan: ArrowEvalPythonExec =>
           val child = plan.child
           // For ArrowEvalPythonExec, CH supports it through EvalPythonExecTransformer while
-          // Velox backend uses ColumnarArrowEvalPythonExec.
+          // Velox backend keeps Spark's ArrowEvalPythonExec, evaluating the UDFs on Arrow data.
           if (
             !BackendsApiManager.getSettings.supportColumnarArrowUdf() ||
             !GlutenConfig.get.enableColumnarArrowUDF

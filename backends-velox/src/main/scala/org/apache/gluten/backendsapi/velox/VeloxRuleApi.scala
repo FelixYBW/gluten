@@ -134,6 +134,7 @@ object VeloxRuleApi {
     injector.injectPostTransform(_ => CollectLimitTransformerRule())
     injector.injectPostTransform(_ => CollectTailTransformerRule())
     injector.injectPostTransform(_ => V2WritePostRule())
+    injector.injectPostTransform(_ => InsertArrowInputForArrowEvalPython())
     injector.injectPostTransform(c => InsertTransitions.create(c.outputsColumnar, VeloxBatchType))
 
     // Gluten columnar: Fallback policies.

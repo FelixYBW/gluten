@@ -464,7 +464,7 @@ trait SparkPlanExecApi {
       options: Map[String, String],
       staticPartitions: TablePartitionSpec): ColumnarWriteFilesExec
 
-  /** Create ColumnarArrowEvalPythonExec, for velox backend */
+  /** Create the plan evaluating Arrow Python UDFs, for velox backend */
   def createColumnarArrowEvalPythonExec(
       udfs: Seq[PythonUDF],
       resultAttrs: Seq[Attribute],

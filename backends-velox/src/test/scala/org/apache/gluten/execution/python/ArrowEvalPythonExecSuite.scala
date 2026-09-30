@@ -20,8 +20,9 @@ import org.apache.gluten.config.GlutenConfig
 import org.apache.gluten.execution.{LoadArrowDataExec, OffloadArrowDataExec, WholeStageTransformerSuite}
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.IntegratedUDFTestUtils
-import org.apache.spark.sql.execution.python.{ColumnarArrowEvalPythonExec, UserDefinedPythonFunction}
+import org.apache.spark.sql.{DataFrame, IntegratedUDFTestUtils}
+import org.apache.spark.sql.execution.convention.BatchType
+import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, UserDefinedPythonFunction}
 import org.apache.spark.sql.functions.{count, max, sum}
 import org.apache.spark.sql.types.{DataType, LongType, StringType}
 import org.apache.spark.util.SparkVersionUtil
@@ -49,10 +50,27 @@ class ArrowEvalPythonExecSuite extends WholeStageTransformerSuite {
       .set("spark.sql.shuffle.partitions", "1")
       .set("spark.default.parallelism", "1")
       .set("spark.executor.cores", "1")
+      // Gluten falls back to vanilla Spark in ANSI mode, enabled by default since Spark 4.0.
+      .set("spark.sql.ansi.enabled", "false")
   }
 
-  // TODO: fix on spark-4.1
-  testWithMaxSparkVersion("arrow_udf test: without projection", "4.0") {
+  /**
+   * Checks that Spark's ArrowEvalPythonExec evaluates the UDFs of `df` on the Arrow data loaded
+   * from Velox, and returns the execs.
+   */
+  private def checkArrowEvalPython(df: DataFrame): Seq[ArrowEvalPythonExec] = {
+    val plan = getExecutedPlan(df)
+    val udfs = plan.collect { case p: ArrowEvalPythonExec => p }
+    assert(udfs.nonEmpty, plan)
+    udfs.foreach {
+      p =>
+        assert(p.convention.batchType == BatchType.ArrowBatchType, plan)
+        assert(p.child.isInstanceOf[LoadArrowDataExec], plan)
+    }
+    udfs
+  }
+
+  test("arrow_udf test: without projection") {
     lazy val base =
       Seq(("1", 1), ("1", 2), ("2", 1), ("2", 2), ("3", 1), ("3", 2), ("0", 1), ("3", 0))
         .toDF("a", "b")
@@ -68,12 +86,11 @@ class ArrowEvalPythonExecSuite extends WholeStageTransformerSuite {
     ).toDF("a", "p_a")
 
     val df2 = base.select("a").withColumn("p_a", pyarrowTestUDFString(base("a")))
-    checkSparkPlan[ColumnarArrowEvalPythonExec](df2)
+    checkArrowEvalPython(df2)
     checkAnswer(df2, expected)
   }
 
-  // TODO: fix on spark-4.1
-  testWithMaxSparkVersion("arrow_udf test: with unrelated projection", "4.0") {
+  test("arrow_udf test: with unrelated projection") {
     lazy val base =
       Seq(("1", 1), ("1", 2), ("2", 1), ("2", 2), ("3", 1), ("3", 2), ("0", 1), ("3", 0))
         .toDF("a", "b")
@@ -90,12 +107,12 @@ class ArrowEvalPythonExecSuite extends WholeStageTransformerSuite {
 
     val df =
       base.withColumn("p_a", pyarrowTestUDFString(base("a"))).withColumn("d_b", base("b") * 2)
-    checkSparkPlan[ColumnarArrowEvalPythonExec](df)
+    // The row-based local table scan is not offloaded: Spark evaluates the UDF on its rows.
+    checkSparkPlan[ArrowEvalPythonExec](df)
     checkAnswer(df, expected)
   }
 
-  // TODO: fix on spark-4.1
-  testWithMaxSparkVersion("arrow_udf test: with preprojection", "4.0") {
+  test("arrow_udf test: with preprojection") {
     lazy val base =
       Seq(("1", 1), ("1", 2), ("2", 1), ("2", 2), ("3", 1), ("3", 2), ("0", 1), ("3", 0))
         .toDF("a", "b")
@@ -136,15 +153,12 @@ class ArrowEvalPythonExecSuite extends WholeStageTransformerSuite {
       }
       val df = query()
       checkAnswer(df, expected)
-      checkSparkPlan[ColumnarArrowEvalPythonExec](df)
       // ArrowJavaBatchType is Spark's ArrowBatchType: no transition other than loading and
       // offloading Arrow data is needed around the UDF.
+      assert(checkArrowEvalPython(df).size == 2)
       val plan = getExecutedPlan(df)
-      val udfs = plan.collect { case p: ColumnarArrowEvalPythonExec => p }
-      assert(udfs.size == 2, plan)
-      assert(udfs.forall(_.child.isInstanceOf[LoadArrowDataExec]), plan)
       val offloadedUdfs = plan.collect {
-        case p: OffloadArrowDataExec if p.child.isInstanceOf[ColumnarArrowEvalPythonExec] => p
+        case p: OffloadArrowDataExec if p.child.isInstanceOf[ArrowEvalPythonExec] => p
       }
       assert(offloadedUdfs.size == 2, plan)
     }
@@ -161,7 +175,7 @@ class ArrowEvalPythonExecSuite extends WholeStageTransformerSuite {
         val expected = Seq(Tuple1("SHIP")).toDF("max_shipmode")
 
         checkAnswer(df, expected)
-        checkSparkPlan[ColumnarArrowEvalPythonExec](df)
+        checkArrowEvalPython(df)
     }
   }
 

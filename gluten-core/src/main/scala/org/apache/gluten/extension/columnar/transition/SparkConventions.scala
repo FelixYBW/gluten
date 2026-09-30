@@ -17,7 +17,7 @@
 package org.apache.gluten.extension.columnar.transition
 
 import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.convention.{BatchType => SparkBatchType, ConventionReq => SparkConventionReq, RowType => SparkRowType}
+import org.apache.spark.sql.execution.convention.{BatchType => SparkBatchType, Convention => SparkConvention, ConventionReq => SparkConventionReq, RowType => SparkRowType}
 
 import java.util.concurrent.ConcurrentHashMap
 
@@ -29,23 +29,29 @@ import java.util.concurrent.ConcurrentHashMap
  * `SparkBatchType.ArrowBatchType`) is then planned by Gluten like any other plan of the Gluten
  * type: Gluten inserts its own transitions around it, with no operator-specific code.
  *
- * Gluten plans themselves keep reporting vanilla conventions to Spark (derived from
- * `supportsRowBased` / `supportsColumnar`): Spark's transition insertion only runs on the plan
- * before Gluten's rules are applied.
+ * Conversely, a Gluten plan of a Gluten type bound to a Spark type reports that Spark type to
+ * Spark, e.g. a plan of `ArrowJavaBatchType` reports `ArrowBatchType`, so Spark operators planned
+ * on top of it see its actual layout. Gluten plans of other types report vanilla conventions, as
+ * before. Spark's transition insertion only runs on the plan before Gluten's rules are applied, and
+ * never plans transitions below a Gluten plan.
  */
 object SparkConventions {
   private val rowTypes = new ConcurrentHashMap[SparkRowType, Convention.RowType]()
   private val batchTypes = new ConcurrentHashMap[SparkBatchType, Convention.BatchType]()
+  private val sparkRowTypes = new ConcurrentHashMap[Convention.RowType, SparkRowType]()
+  private val sparkBatchTypes = new ConcurrentHashMap[Convention.BatchType, SparkBatchType]()
 
   bind(SparkRowType.VanillaRowType, Convention.RowType.VanillaRowType)
   bind(SparkBatchType.VanillaBatchType, Convention.BatchType.VanillaBatchType)
 
   def bind(spark: SparkRowType, gluten: Convention.RowType): Unit = {
     rowTypes.put(spark, gluten)
+    sparkRowTypes.put(gluten, spark)
   }
 
   def bind(spark: SparkBatchType, gluten: Convention.BatchType): Unit = {
     batchTypes.put(spark, gluten)
+    sparkBatchTypes.put(gluten, spark)
   }
 
   private def isVanilla(t: SparkRowType): Boolean =
@@ -70,6 +76,26 @@ object SparkConventions {
     Option(batchTypes.get(t)).getOrElse {
       throw new IllegalStateException(s"Spark batch type $t is not bound to a Gluten batch type")
     }
+  }
+
+  /**
+   * The Spark convention reported by a Gluten plan of `rowType` / `batchType`: the Spark types they
+   * are bound to, or vanilla types for Gluten types not bound to a Spark type.
+   */
+  def sparkConventionOf(
+      rowType: Convention.RowType,
+      batchType: Convention.BatchType): SparkConvention = {
+    val sparkRowType = if (rowType == Convention.RowType.None) {
+      SparkRowType.None
+    } else {
+      Option(sparkRowTypes.get(rowType)).getOrElse(SparkRowType.VanillaRowType)
+    }
+    val sparkBatchType = if (batchType == Convention.BatchType.None) {
+      SparkBatchType.None
+    } else {
+      Option(sparkBatchTypes.get(batchType)).getOrElse(SparkBatchType.VanillaBatchType)
+    }
+    SparkConvention(sparkRowType, sparkBatchType)
   }
 
   /** Whether a vanilla plan declares a non-vanilla Spark row type. */
