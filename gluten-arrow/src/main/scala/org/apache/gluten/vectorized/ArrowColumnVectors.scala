@@ -67,13 +67,30 @@ object ArrowColumnVectors {
 
   /**
    * Takes ownership of `vector` in `allocator`: its buffers are moved to a new vector without
-   * copying when it shares the allocator's root, and copied otherwise (Arrow buffers can't move
-   * across allocator roots, e.g. from vectors allocated by Spark).
+   * copying when it shares the allocator's root, e.g. Spark's vectors since Gluten's allocators are
+   * children of Spark's root allocator, and copied otherwise (Arrow buffers can't move across
+   * allocator roots).
    */
   def adopt(vector: ValueVector, allocator: BufferAllocator): FieldVector = {
     if (vector.getAllocator.getRoot == allocator.getRoot) {
+      val source = vector.getAllocator
+      val sourceBefore = source.getAllocatedMemory
+      val targetBefore = allocator.getAllocatedMemory
       val pair = vector.getTransferPair(allocator)
       pair.transfer()
+      if (source ne allocator) {
+        // Allocation listeners are not notified of transfers, but the target's is when the moved
+        // buffers are released: move their accounting from the source's listener to it.
+        val released = sourceBefore - source.getAllocatedMemory
+        if (released > 0) {
+          source.getListener.onRelease(released)
+        }
+        val moved = allocator.getAllocatedMemory - targetBefore
+        if (moved > 0) {
+          allocator.getListener.onPreAllocation(moved)
+          allocator.getListener.onAllocation(moved)
+        }
+      }
       pair.getTo.asInstanceOf[FieldVector]
     } else {
       val target = vector.getField.createVector(allocator)

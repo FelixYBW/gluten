@@ -25,6 +25,7 @@ import org.apache.arrow.memory.AllocationListener;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.spark.memory.GlobalOffHeapMemory;
+import org.apache.spark.sql.utils.SparkArrowUtil;
 import org.apache.spark.task.TaskResource;
 import org.apache.spark.task.TaskResources;
 import org.slf4j.Logger;
@@ -84,10 +85,16 @@ public class ArrowBufferAllocators {
       }
     }
 
-    private final BufferAllocator managed = new RootAllocator(listener, Long.MAX_VALUE);
+    // A child of Spark's root allocator, so that Arrow buffers move without copying between
+    // Gluten's vectors and Spark's, e.g. the results of Arrow Python UDFs. See
+    // ArrowColumnVectors#adopt for the accounting of moved buffers.
+    private final BufferAllocator managed;
 
     public ArrowBufferAllocatorManager(String name) {
       this.name = name;
+      this.managed =
+          SparkArrowUtil.rootAllocator()
+              .newChildAllocator("ArrowContextInstance:" + name, listener, 0, Long.MAX_VALUE);
     }
 
     private void close() {

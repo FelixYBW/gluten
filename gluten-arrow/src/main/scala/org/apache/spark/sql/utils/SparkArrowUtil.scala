@@ -18,7 +18,9 @@ package org.apache.spark.sql.utils
 
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.util.ArrowUtils
 
+import org.apache.arrow.memory.BufferAllocator
 import org.apache.arrow.vector.complex.MapVector
 import org.apache.arrow.vector.types.{DateUnit, FloatingPointPrecision, IntervalUnit, TimeUnit}
 import org.apache.arrow.vector.types.pojo.{ArrowType, Field, FieldType, Schema}
@@ -29,6 +31,9 @@ import scala.collection.JavaConverters._
 
 /** Originated from org.apache.spark.sql.util.ArrowUtils. */
 object SparkArrowUtil {
+
+  /** Spark's root Arrow allocator, e.g. of the vectors of Spark's Arrow Python runners. */
+  def rootAllocator: BufferAllocator = ArrowUtils.rootAllocator
 
   /** Maps data type from Spark to Arrow. NOTE: timeZoneId required for TimestampTypes */
   def toArrowType(dt: DataType, timeZoneId: String): ArrowType = dt match {
