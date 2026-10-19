@@ -304,11 +304,11 @@ General configurations for shuffle write:
   or use hardware accelerators Valid options are: lz4, zstd, qat-gzip, qat-zstd and iaa-gzip. The compression levels are fixed (use default compression level 1).
 
   Note using QAT or IAA codec requires Gluten cpp is built with these features.
-  Please check the corresponding section in [Velox document](../get-started/Velox.md) first for how to
+  Please check the corresponding section in [Velox document](../backends/velox/get-started/Velox.md) first for how to
   setup, build and enable these features in Gluten. For QAT support, please
-  check [Intel® QuickAssist Technology (QAT) support](../get-started/Velox.md#intel-quickassist-technology-qat-support).
+  check [Intel® QuickAssist Technology (QAT) support](../backends/velox/get-started/Velox.md#intel-quickassist-technology-qat-support).
   For IAA support, please
-  check [Intel® In-memory Analytics Accelerator (IAA/IAX) support](../get-started/Velox.md#intel-in-memory-analytics-accelerator-iaaiax-support)
+  check [Intel® In-memory Analytics Accelerator (IAA/IAX) support](../backends/velox/get-started/Velox.md#intel-in-memory-analytics-accelerator-iaaiax-support)
 
 ```shell
 cd /path/to/gluten/cpp/build/velox/benchmarks

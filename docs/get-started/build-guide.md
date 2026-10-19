@@ -36,7 +36,7 @@ These environment variables can be set before running build scripts to control b
 
 | Variable               | Description                                                                                   | Default |
 |------------------------|-----------------------------------------------------------------------------------------------|---------|
-| VCPKG_DYNAMIC_OPENSSL  | Enable dynamic OpenSSL linking with FIPS support (requires `enable_vcpkg=ON`). See [Dynamic OpenSSL](VeloxDynamicOpenSSL.md) for details. | OFF     |
+| VCPKG_DYNAMIC_OPENSSL  | Enable dynamic OpenSSL linking with FIPS support (requires `enable_vcpkg=ON`). See [Dynamic OpenSSL](../backends/velox/get-started/VeloxDynamicOpenSSL.md) for details. | OFF     |
 
 
 ### Velox build parameters for build-velox.sh

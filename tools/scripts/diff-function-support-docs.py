@@ -46,7 +46,7 @@ def header(text):
 
 
 for cat in ["scalar", "aggregate", "window", "generator"]:
-    path = f"docs/velox-backend-{cat}-function-support.md"
+    path = f"docs/backends/velox/velox-backend-{cat}-function-support.md"
     old_text = subprocess.run(
         ["git", "show", f"{REV}:{path}"], capture_output=True, text=True
     ).stdout
