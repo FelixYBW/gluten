@@ -99,7 +99,7 @@ gdb cpp/build/velox/benchmarks/generic_benchmark
 5. You can start `generic_benchmark` with specific JSON plan and input files
 - You can also edit the file `plan_12_0.json` to custom the Substrait plan or specify the inputs files placed in the other directory.
 
-6. Get more detail information about benchmarks from [MicroBenchmarks](./MicroBenchmarks.md)
+6. Get more detail information about benchmarks from [MicroBenchmarks](../backends/velox/developers/MicroBenchmarks.md)
 
 ## 2 How to debug plan validation process
 

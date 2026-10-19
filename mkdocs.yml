@@ -34,11 +34,7 @@ nav:
   - How to Release: developers/HowToRelease.md
   - C++ Coding Style: developers/CppCodingStyle.md
   - Substrait Modifications: developers/SubstraitModifications.md
-  - Micro Benchmarks: developers/MicroBenchmarks.md
-  - Query Trace: developers/QueryTrace.md
   - Metrics Framework: developers/MetricsFramework.md
-  - Partial Project: developers/PartialProject.md
-  - Arrow Columnar Conversion: developers/ArrowColumnarConversion.md
   - Bloop Integration: developers/bloop-integration.md
   - Dev Container: developers/dev-container.md
   - Improvement Proposals: developers/improvement-proposals.md
@@ -52,7 +48,6 @@ nav:
     - Velox with Iceberg: backends/velox/get-started/VeloxIceberg.md
     - Velox with Lance: backends/velox/get-started/VeloxLance.md
     - Velox with GPU: backends/velox/get-started/VeloxGPU.md
-    - Velox with QAT: backends/velox/get-started/VeloxQAT.md
     - Velox Local Caching: backends/velox/get-started/VeloxLocalCache.md
     - Stage Resource Adjustment: backends/velox/get-started/VeloxStageResourceAdj.md
     - Dynamic OpenSSL: backends/velox/get-started/VeloxDynamicOpenSSL.md
@@ -76,6 +71,10 @@ nav:
     - Build in Docker: backends/velox/developers/velox-backend-build-in-docker.md
     - Memory Profiling: backends/velox/developers/ProfileMemoryOfGlutenWithVelox.md
     - Dynamic Off-Heap Sizing: backends/velox/developers/VeloxDynamicSizingOffheap.md
+    - Micro Benchmarks: backends/velox/developers/MicroBenchmarks.md
+    - Query Trace: backends/velox/developers/QueryTrace.md
+    - Partial Project: backends/velox/developers/PartialProject.md
+    - Arrow Columnar Conversion: backends/velox/developers/ArrowColumnarConversion.md
 - Bolt Backend:
   - Getting Started:
     - Bolt Backend: backends/bolt/get-started/Bolt.md

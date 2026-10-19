@@ -43,7 +43,9 @@ class AllVeloxConfiguration extends AnyFunSuite {
       s"""
          |## Gluten Velox backend configurations
          |
-         | Key | Modifiability | Default | Description
+         |${AllGlutenConfiguration.configTypeLegend}
+         |
+         | Key | Type | Default | Description
          | --- | --- | --- | ---
          |"""
 
@@ -66,7 +68,9 @@ class AllVeloxConfiguration extends AnyFunSuite {
       s"""
          |## Gluten Velox backend *experimental* configurations
          |
-         | Key | Modifiability | Default | Description
+         |${AllGlutenConfiguration.configTypeLegend}
+         |
+         | Key | Type | Default | Description
          | --- | --- | --- | ---
          |"""
 
