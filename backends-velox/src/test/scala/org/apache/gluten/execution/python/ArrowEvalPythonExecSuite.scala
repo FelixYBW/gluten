@@ -21,7 +21,7 @@ import org.apache.gluten.execution.{LoadArrowDataExec, OffloadArrowDataExec, Who
 
 import org.apache.spark.SparkConf
 import org.apache.spark.api.python.ColumnarArrowEvalPythonExec
-import org.apache.spark.sql.{IntegratedUDFTestUtils, Row}
+import org.apache.spark.sql.{DataFrame, IntegratedUDFTestUtils, Row}
 import org.apache.spark.sql.execution.python.UserDefinedPythonFunction
 import org.apache.spark.sql.functions.{count, max, sum}
 import org.apache.spark.sql.types.{DataType, LongType, StringType}
@@ -126,7 +126,7 @@ class ArrowEvalPythonExecSuite extends WholeStageTransformerSuite {
           "if(id % 11 = 0, null, cast(id % 7 as string)) as s",
           "if(id % 5 = 0, null, id * 1.5) as d")
       // Velox operators both below and above the UDF, over many small batches.
-      def query() = base
+      def query(): DataFrame = base
         .filter("id > 10")
         .withColumn("p_s", pyarrowTestUDFString(base("s")))
         .filter("p_s <> '3'")
