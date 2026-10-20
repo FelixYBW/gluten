@@ -279,9 +279,9 @@ COPY --from=gluten-cpp-image-with-cache:latest /incubator-gluten /incubator-glut
 COPY --from=gluten-cpp-image-with-cache:latest /velox /velox
 
 #/////////////////////////////////////////////
-#          gluten-jar-image-ibm-spark3.4
+#          gluten-jar-imageg-spark3.4
 #//////////////////////////////////////////////
-FROM gluten-cpp-image AS gluten-image-ibm-spark3.4
+FROM gluten-cpp-image AS gluten-imageg-spark3.4
 
 ARG SPARK_VERSION
 
@@ -301,27 +301,27 @@ RUN if [ "${SPARK_VERSION}" = "4.0" ]; then SCALA_VERSION=2.13; else SCALA_VERSI
     mv ./gluten-velox-bundle-*.jar package/target/
 
 #/////////////////////////////////////////////
-#          gluten-jar-image-ibm-spark3.5
+#          gluten-jar-imageg-spark3.5
 #//////////////////////////////////////////////
-FROM gluten-image-ibm-spark3.4 AS gluten-image-ibm-spark3.5
+FROM gluten-imageg-spark3.4 AS gluten-imageg-spark3.5
 ARG SPARK_VERSION
 
     # 3.5 reuse 3.4 script
 
 #/////////////////////////////////////////////
-#          gluten-jar-image-ibm-spark4.0
+#          gluten-jar-imageg-spark4.0
 #//////////////////////////////////////////////
-FROM gluten-image-ibm-spark3.4 AS gluten-image-ibm-spark4.0
+FROM gluten-imageg-spark3.4 AS gluten-imageg-spark4.0
 ARG SPARK_VERSION
 
 #/////////////////////////////////////////////
-#          gluten-runtime-ibm-spark
+#          gluten-runtimeg-spark
 #//////////////////////////////////////////////
 
 # The Gluten build image *is* the runtime image: the bundle jar is symlinked out of the build
 # tree rather than copied into a fresh base, so the toolchain, /root/.m2 and the Velox/Gluten
 # build tree all survive into the shipped image and Gluten can be rebuilt in place.
-FROM gluten-image-ibm-spark${SPARK_VERSION} AS deploy-image-oss-spark
+FROM gluten-imageg-spark${SPARK_VERSION} AS deploy-image-oss-spark
 
 ARG SPARK_VERSION
 
