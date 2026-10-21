@@ -31,6 +31,7 @@ import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.CDataDictionaryProvider;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.ValueVector;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
@@ -42,7 +43,9 @@ import org.apache.spark.sql.vectorized.ColumnarBatch;
 import org.apache.spark.sql.vectorized.SparkColumnarBatchUtil;
 
 import java.util.Arrays;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 import scala.collection.JavaConverters;
@@ -105,12 +108,27 @@ public final class ColumnarBatches {
     return allArrow && !allRefCounted;
   }
 
-  /** Moves (or copies) the Arrow vectors of `input` into a new batch owned by Gluten. */
+  /**
+   * Moves (or copies) the Arrow vectors of `input` into a new batch owned by Gluten. A vector is
+   * copied instead of moved when moving would empty it for someone else: a Gluten {@link
+   * RefCountedArrowColumnVector} passed through by the producer may still be referenced elsewhere,
+   * and a vector used by several columns must stay readable for the other columns.
+   */
   private static ColumnarBatch adopt(BufferAllocator allocator, ColumnarBatch input) {
+    Map<ValueVector, Integer> uses = new IdentityHashMap<>();
+    for (int i = 0; i < input.numCols(); i++) {
+      uses.merge(((ArrowColumnVector) input.column(i)).getValueVector(), 1, Integer::sum);
+    }
     ColumnVector[] columns = new ColumnVector[input.numCols()];
     for (int i = 0; i < input.numCols(); i++) {
-      ValueVector vector = ((ArrowColumnVector) input.column(i)).getValueVector();
-      columns[i] = new RefCountedArrowColumnVector(ArrowColumnVectors.adopt(vector, allocator));
+      ColumnVector column = input.column(i);
+      ValueVector vector = ((ArrowColumnVector) column).getValueVector();
+      boolean shared = column instanceof RefCountedArrowColumnVector || uses.get(vector) > 1;
+      FieldVector adopted =
+          shared
+              ? ArrowColumnVectors.copy(vector, allocator)
+              : ArrowColumnVectors.adopt(vector, allocator);
+      columns[i] = new RefCountedArrowColumnVector(adopted);
     }
     return new ColumnarBatch(columns, input.numRows());
   }

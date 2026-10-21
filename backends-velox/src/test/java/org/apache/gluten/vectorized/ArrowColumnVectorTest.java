@@ -57,6 +57,9 @@ public class ArrowColumnVectorTest extends VeloxBackendTestBase {
           // Closing again is a no-op.
           batch.close();
           Assert.assertEquals(0, col.refCnt());
+          // Retaining a released vector is a lifecycle bug.
+          Assert.assertThrows(IllegalStateException.class, col::retain);
+          Assert.assertEquals(0, col.refCnt());
           return null;
         });
   }
@@ -106,6 +109,98 @@ public class ArrowColumnVectorTest extends VeloxBackendTestBase {
           }
           return null;
         });
+  }
+
+  @Test
+  public void testOffloadSameRootVectorUsedTwice() {
+    TaskResources$.MODULE$.runUnsafe(
+        () -> {
+          final int numRows = 10;
+          // Allocated from Gluten's allocator, so adopting it could move its buffers.
+          try (IntVector vector = new IntVector("a", ArrowBufferAllocators.contextInstance())) {
+            fill(vector, numRows);
+            final ArrowColumnVector column = new ArrowColumnVector(vector);
+            // The same vector in two columns, e.g. from SELECT a, a.
+            final ColumnarBatch input =
+                new ColumnarBatch(new ColumnVector[] {column, column}, numRows);
+            final ColumnarBatch loaded =
+                ColumnarBatches.load(
+                    ArrowBufferAllocators.contextInstance(),
+                    ColumnarBatches.offload(ArrowBufferAllocators.contextInstance(), input));
+            for (int i = 0; i < numRows; i++) {
+              Assert.assertEquals(i * 3, loaded.column(0).getInt(i));
+              Assert.assertEquals(i * 3, loaded.column(1).getInt(i));
+            }
+            loaded.close();
+            // The producer's vector is unchanged.
+            Assert.assertEquals(9, vector.get(3));
+          }
+          return null;
+        });
+  }
+
+  @Test
+  public void testOffloadMixedBatchKeepsGlutenColumn() {
+    TaskResources$.MODULE$.runUnsafe(
+        () -> {
+          final int numRows = 10;
+          // A Gluten column that another operator still holds, passed through by a producer next
+          // to a column of its own.
+          final ColumnarBatch gluten =
+              ArrowColumnVectors.fromRows(
+                  StructType.fromDDL("a int"),
+                  JavaConverters.asScalaIterator(
+                      Collections.<InternalRow>singletonList(
+                              new GenericInternalRow(new Object[] {42}))
+                          .iterator()),
+                  ArrowBufferAllocators.contextInstance());
+          final RefCountedArrowColumnVector kept = (RefCountedArrowColumnVector) gluten.column(0);
+          try (IntVector own = new IntVector("b", ArrowBufferAllocators.contextInstance())) {
+            fill(own, 1);
+            final ColumnarBatch input =
+                new ColumnarBatch(new ColumnVector[] {kept, new ArrowColumnVector(own)}, 1);
+            final ColumnarBatch loaded =
+                ColumnarBatches.load(
+                    ArrowBufferAllocators.contextInstance(),
+                    ColumnarBatches.offload(ArrowBufferAllocators.contextInstance(), input));
+            Assert.assertEquals(42, loaded.column(0).getInt(0));
+            Assert.assertEquals(0, loaded.column(1).getInt(0));
+            loaded.close();
+          }
+          // The Gluten column keeps its data and reference count.
+          Assert.assertEquals(1, kept.refCnt());
+          Assert.assertEquals(42, kept.getInt(0));
+          gluten.close();
+          return null;
+        });
+  }
+
+  @Test
+  public void testFromRowsReleasesRootOnFailure() {
+    TaskResources$.MODULE$.runUnsafe(
+        () -> {
+          final BufferAllocator allocator = ArrowBufferAllocators.contextInstance();
+          final long before = allocator.getAllocatedMemory();
+          final scala.collection.Iterator<InternalRow> rows =
+              JavaConverters.asScalaIterator(
+                  java.util.Arrays.<InternalRow>asList(
+                          new GenericInternalRow(new Object[] {1}),
+                          new GenericInternalRow(new Object[] {"not an int"}))
+                      .iterator());
+          Assert.assertThrows(
+              ClassCastException.class,
+              () -> ArrowColumnVectors.fromRows(StructType.fromDDL("a int"), rows, allocator));
+          Assert.assertEquals(before, allocator.getAllocatedMemory());
+          return null;
+        });
+  }
+
+  private static void fill(IntVector vector, int numRows) {
+    vector.allocateNew(numRows);
+    for (int i = 0; i < numRows; i++) {
+      vector.set(i, i * 3);
+    }
+    vector.setValueCount(numRows);
   }
 
   private static ColumnarBatch newBatch(String schema, InternalRow row) {

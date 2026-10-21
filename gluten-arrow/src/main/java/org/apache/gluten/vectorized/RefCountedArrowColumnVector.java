@@ -37,21 +37,41 @@ public final class RefCountedArrowColumnVector extends ArrowColumnVector {
     super(vector);
   }
 
+  /**
+   * Adds a reference.
+   *
+   * @throws IllegalStateException if the vector is already released
+   */
   public void retain() {
-    refCnt.getAndIncrement();
+    while (true) {
+      long current = refCnt.get();
+      if (current == 0) {
+        throw new IllegalStateException("Cannot retain a released vector");
+      }
+      if (refCnt.compareAndSet(current, current + 1)) {
+        return;
+      }
+    }
   }
 
   public long refCnt() {
     return refCnt.get();
   }
 
+  /** Drops a reference, and releases the Arrow vector on the last one. No-op once released. */
   @Override
   public void close() {
-    if (refCnt.get() == 0) {
-      return;
-    }
-    if (refCnt.decrementAndGet() == 0) {
-      super.close();
+    while (true) {
+      long current = refCnt.get();
+      if (current == 0) {
+        return;
+      }
+      if (refCnt.compareAndSet(current, current - 1)) {
+        if (current == 1) {
+          super.close();
+        }
+        return;
+      }
     }
   }
 }

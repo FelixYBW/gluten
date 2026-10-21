@@ -59,9 +59,15 @@ object ArrowColumnVectors {
       rows: Iterator[InternalRow],
       allocator: BufferAllocator = ArrowBufferAllocators.contextInstance()): ColumnarBatch = {
     val root = allocateRoot(schema, allocator)
-    val writer = ArrowWriter.create(root)
-    rows.foreach(writer.write)
-    writer.finish()
+    try {
+      val writer = ArrowWriter.create(root)
+      rows.foreach(writer.write)
+      writer.finish()
+    } catch {
+      case t: Throwable =>
+        root.close()
+        throw t
+    }
     toBatch(root)
   }
 
@@ -76,10 +82,15 @@ object ArrowColumnVectors {
       pair.transfer()
       pair.getTo.asInstanceOf[FieldVector]
     } else {
-      val target = vector.getField.createVector(allocator)
-      target.allocateNew()
-      vector.accept(new VectorAppender(target), null)
-      target
+      copy(vector, allocator)
     }
+  }
+
+  /** Copies `vector` into a new vector in `allocator`, leaving `vector` unchanged. */
+  def copy(vector: ValueVector, allocator: BufferAllocator): FieldVector = {
+    val target = vector.getField.createVector(allocator)
+    target.allocateNew()
+    vector.accept(new VectorAppender(target), null)
+    target
   }
 }
