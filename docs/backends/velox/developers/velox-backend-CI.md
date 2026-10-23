@@ -18,9 +18,22 @@ Dockerfile.centos8-gcc13-static-build | apache/gluten:vcpkg-centos-8-gcc13 | cen
 Dockerfile.centos8-dynamic-build | apache/gluten:centos-8-jdk8 | centos 8, dynamic link, jdk8
 Dockerfile.centos8-dynamic-build | apache/gluten:centos-8-jdk11 | centos 8, dynamic link, jdk11
 Dockerfile.centos8-dynamic-build | apache/gluten:centos-8-jdk17 | centos 8, dynamic link, jdk17
+Dockerfile.centos9-dynamic-build | apache/gluten:centos-9-jdk8 | centos 9, dynamic link, jdk8
+Dockerfile.centos9-dynamic-build | apache/gluten:centos-9-jdk17 | centos 9, dynamic link, jdk17
+Dockerfile.centos8-runtime | apache/gluten:centos-8-runtime | centos 8 + jdk 8/11/17 + CI tools only, for TPC runs of the static library
+Dockerfile.centos9-runtime | apache/gluten:centos-9-runtime | centos 9 (x86, arm64) + jdk 8/11/17/21 + CI tools only, for TPC runs of the static library
+ubuntu/Dockerfile.ubuntu22-runtime | apache/gluten:ubuntu-22.04-runtime | ubuntu 22.04 + jdk 8/11/17/21/25 + CI tools only, for TPC runs of the static library
 cudf/Dockerfile.centos-9-jdk17-cuda13.1-cudf | apache/gluten:centos-9-jdk17-cuda13.1-cudf | centos 9, dynamic link, jdk17
 
 The Docker images can be found at [https://hub.docker.com/r/apache/gluten/tags](https://hub.docker.com/r/apache/gluten/tags).
+
+## CI Tools
+Tools that CI jobs need at runtime are installed into the images instead of being downloaded by each job, so PR jobs
+do not depend on package mirrors. `dev/docker/install-ci-tools.sh` installs `gh` and `jq` (used by the Apache Stash
+cache actions) into the build and runtime images. The `*-runtime` images contain only the OS, JDKs and these tools, so
+TPC jobs still check that the static native library runs on a plain OS. The centos dynamic images also ship JDK 17 next to their default JDK, and one PySpark
+virtualenv per version used by the Spark unit tests under `/opt/pyspark/<version>`. A job selects one by putting
+`/opt/pyspark/<version>/bin` first in `PATH`.
 
 ## Vcpkg Caching
 The Gluten main branch is pulled during the static build in Docker, and vcpkg caches binary data for all dependencies defined under `dev/vcpkg`.

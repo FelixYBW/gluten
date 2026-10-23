@@ -59,3 +59,15 @@ RUN set -ex; \
     dnf clean all; \
     rm -rf /opt/gluten; \
     rm -rf /root/.cache/ccache;
+
+# Everything the CI jobs used to install at runtime, so PR jobs never reach a package mirror:
+# JDK 17 for the Spark unit tests (every JDK variant), the TPC/Delta tools, regex for
+# dev/check.py, and one PySpark virtualenv per version under /opt/pyspark (see
+# install-ci-tools.sh).
+COPY dev/docker/install-ci-tools.sh /opt/ci/install-ci-tools.sh
+RUN set -ex; \
+    dnf install -y java-17-openjdk-devel procps-ng which findutils gzip tzdata python3-pip \
+        python3.11 python3.11-pip python3.11-devel; \
+    python3 -m pip install --no-cache-dir regex requests; \
+    bash /opt/ci/install-ci-tools.sh --pyspark-python=/usr/bin/python3.11; \
+    dnf clean all;

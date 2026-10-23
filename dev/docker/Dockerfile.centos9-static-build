@@ -46,3 +46,8 @@ RUN set -ex; \
     ./build/mvn dependency:go-offline -Pbackends-velox -Piceberg -Pdelta -Pspark-3.5 -DskipTests; \
     rm -rf /opt/gluten; \
     rm -rf /root/.cache/ccache;
+
+# gh and jq for the Apache Stash cache actions, which the native build jobs used to download
+# at runtime.
+COPY dev/docker/install-ci-tools.sh /opt/ci/install-ci-tools.sh
+RUN bash /opt/ci/install-ci-tools.sh

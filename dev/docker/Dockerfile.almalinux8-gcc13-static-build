@@ -71,3 +71,13 @@ RUN set -ex; \
     ./build/mvn dependency:go-offline -Pbackends-velox -Piceberg -Pdelta -Pspark-3.5 -DskipTests; \
     rm -rf /opt/gluten; \
     rm -rf /root/.cache/ccache;
+
+# Tools the native build jobs used to install at runtime: gh and jq for the Apache Stash
+# cache actions, tzdata, and Python 3.9 as python3.
+COPY dev/docker/install-ci-tools.sh /opt/ci/install-ci-tools.sh
+RUN set -ex; \
+    dnf install -y tzdata; \
+    dnf module -y install python39; \
+    alternatives --set python3 /usr/bin/python3.9; \
+    bash /opt/ci/install-ci-tools.sh; \
+    dnf clean all;
