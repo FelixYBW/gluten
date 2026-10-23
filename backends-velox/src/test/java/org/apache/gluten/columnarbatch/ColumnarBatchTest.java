@@ -27,7 +27,6 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.sql.vectorized.ArrowColumnVector;
 import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 import org.apache.spark.task.TaskResources$;
@@ -236,7 +235,7 @@ public class ColumnarBatchTest extends VeloxBackendTestBase {
   }
 
   @Test
-  public void testLoadDoesNotReserveNativeMemoryTwice() {
+  public void testUntrackedLoadDoesNotReserveNativeMemoryTwice() {
     TaskResources$.MODULE$.runUnsafe(
         () -> {
           final int numRows = 4 * 1024 * 1024;
@@ -264,17 +263,13 @@ public class ColumnarBatchTest extends VeloxBackendTestBase {
                   .next();
           Assert.assertEquals(numRows, veloxBatch.numRows());
           // The buffers of the loaded batch are still allocated from (and reserved by) the Velox
-          // memory pool, so loading must not reserve Spark memory for them again.
+          // memory pool, so loading them into the untracked allocator (as operators do for the
+          // batches they only read) must not reserve Spark memory for them again.
           final SimpleMemoryUsageRecorder usage = TaskResources$.MODULE$.getSharedUsage();
           final long beforeLoad = usage.current();
           final ColumnarBatch loaded =
-              ColumnarBatches.load(ArrowBufferAllocators.contextInstance(), veloxBatch);
+              ColumnarBatches.load(ArrowBufferAllocators.contextUntrackedInstance(), veloxBatch);
           final long reservedByLoad = usage.current() - beforeLoad;
-          // The loaded vectors must stay in the task allocator's tree, so their buffers can be
-          // moved to or shared with vectors allocated from it.
-          Assert.assertSame(
-              ArrowBufferAllocators.contextInstance().getRoot(),
-              ((ArrowColumnVector) loaded.column(0)).getValueVector().getAllocator().getRoot());
           loaded.close();
           Assert.assertTrue(
               String.format(
