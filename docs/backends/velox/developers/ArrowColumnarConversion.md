@@ -132,6 +132,12 @@ Composite paths that the planner builds from these edges:
   default, `false`.
 - Java Arrow memory comes from `ArrowBufferAllocators.contextInstance()`, Gluten's per-task
   allocator, whose listener reports to Spark's memory manager.
+- `ColumnarBatches.load` imports the native buffers into
+  `ArrowBufferAllocators.contextUntrackedInstance()` instead: a child of the task allocator with a
+  listener that doesn't reserve Spark memory. The buffers stay owned by the native batch, whose
+  memory is already reserved (by the Velox memory pool, or by the Java allocator the batch was
+  offloaded from). Being in the same allocator tree, they can still be moved to or shared with
+  vectors of the task allocator, e.g. by the `VectorLoader` of the Python runner.
 
 ## 4. Example: a Velox column through an Arrow UDF
 
@@ -259,8 +265,10 @@ struct ArrowArray {
 
 ```
 
-In both cases the allocator then calls `listener.onRelease(size)`, and Gluten's
-`ManagedAllocationListener` returns the memory to Spark.
+In both cases the allocator then calls `listener.onRelease(size)`. For a buffer allocated in Java,
+Gluten's `ManagedAllocationListener` returns the memory to Spark. An imported buffer belongs to the
+untracked child allocator, whose listener does nothing: its memory is returned by its owner, e.g.
+by Velox's pool when Velox frees the buffer.
 
 ![How an ArrowBuf is released](../../../image/ArrowBufReleaseDispatch.png)
 
@@ -314,8 +322,8 @@ end
 == When the buffer was created ==
 note over A
   allocator.buffer(size): onPreAllocation borrows from Spark, then allocates.
-  wrapForeignAllocation(size): onPreAllocation also borrows from Spark,
-  but the memory is Velox's, already counted by Velox's pool.
+  wrapForeignAllocation(size): imported into the untracked child allocator,
+  whose listener doesn't borrow: the memory is Velox's, already counted by Velox's pool.
 end note
 @enduml
 ```

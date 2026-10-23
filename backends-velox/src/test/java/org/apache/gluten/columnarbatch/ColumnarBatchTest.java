@@ -18,6 +18,7 @@ package org.apache.gluten.columnarbatch;
 
 import org.apache.gluten.backendsapi.BackendsApiManager;
 import org.apache.gluten.execution.RowToVeloxColumnarExec;
+import org.apache.gluten.memory.SimpleMemoryUsageRecorder;
 import org.apache.gluten.memory.arrow.alloc.ArrowBufferAllocators;
 import org.apache.gluten.test.VeloxBackendTestBase;
 import org.apache.gluten.vectorized.ArrowColumnVectors;
@@ -26,6 +27,7 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.vectorized.ArrowColumnVector;
 import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 import org.apache.spark.task.TaskResources$;
@@ -33,6 +35,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -228,6 +231,56 @@ public class ColumnarBatchTest extends VeloxBackendTestBase {
           Assert.assertEquals(
               "[true,-3]\n[false,null]", ColumnarBatches.toString(veloxBatch, 18, 2));
           veloxBatch.close();
+          return null;
+        });
+  }
+
+  @Test
+  public void testLoadDoesNotReserveNativeMemoryTwice() {
+    TaskResources$.MODULE$.runUnsafe(
+        () -> {
+          final int numRows = 4 * 1024 * 1024;
+          final long dataBytes = numRows * 8L;
+          final Iterator<InternalRow> rows =
+              new Iterator<InternalRow>() {
+                private int rowId = 0;
+
+                @Override
+                public boolean hasNext() {
+                  return rowId < numRows;
+                }
+
+                @Override
+                public InternalRow next() {
+                  return new GenericInternalRow(new Object[] {(long) rowId++});
+                }
+              };
+          final ColumnarBatch veloxBatch =
+              RowToVeloxColumnarExec.toColumnarBatchIterator(
+                      JavaConverters.asScalaIterator(rows),
+                      StructType.fromDDL("a bigint"),
+                      numRows,
+                      Integer.MAX_VALUE)
+                  .next();
+          Assert.assertEquals(numRows, veloxBatch.numRows());
+          // The buffers of the loaded batch are still allocated from (and reserved by) the Velox
+          // memory pool, so loading must not reserve Spark memory for them again.
+          final SimpleMemoryUsageRecorder usage = TaskResources$.MODULE$.getSharedUsage();
+          final long beforeLoad = usage.current();
+          final ColumnarBatch loaded =
+              ColumnarBatches.load(ArrowBufferAllocators.contextInstance(), veloxBatch);
+          final long reservedByLoad = usage.current() - beforeLoad;
+          // The loaded vectors must stay in the task allocator's tree, so their buffers can be
+          // moved to or shared with vectors allocated from it.
+          Assert.assertSame(
+              ArrowBufferAllocators.contextInstance().getRoot(),
+              ((ArrowColumnVector) loaded.column(0)).getValueVector().getAllocator().getRoot());
+          loaded.close();
+          Assert.assertTrue(
+              String.format(
+                  "Loading %d bytes of native data reserved %d more bytes",
+                  dataBytes, reservedByLoad),
+              reservedByLoad < dataBytes / 2);
           return null;
         });
   }

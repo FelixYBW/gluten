@@ -60,6 +60,29 @@ public class ArrowBufferAllocators {
         .managed;
   }
 
+  /**
+   * The untracked child of {@link #contextInstance()}, see {@link
+   * #contextUntrackedInstance(String)}.
+   */
+  public static BufferAllocator contextUntrackedInstance() {
+    return contextUntrackedInstance("Default");
+  }
+
+  /**
+   * A child of {@link #contextInstance(String)} that doesn't reserve Spark memory. Use it to import
+   * Arrow buffers whose memory is already reserved by their owner, e.g. buffers exported from a
+   * native batch, which stay allocated from the native memory pool until they are released. Being
+   * in the same allocator tree, the imported buffers can still be moved to or shared with vectors
+   * of {@link #contextInstance(String)}.
+   */
+  public static BufferAllocator contextUntrackedInstance(String name) {
+    final BufferAllocator parent = contextInstance(name);
+    String id = "ArrowBufferAllocatorManager:Untracked:" + name;
+    return TaskResources.addResourceIfNotRegistered(
+            id, () -> new UntrackedArrowBufferAllocatorManager(name, parent))
+        .managed;
+  }
+
   public static BufferAllocator globalInstance() {
     return GLOBAL_INSTANCE;
   }
@@ -121,6 +144,43 @@ public class ArrowBufferAllocators {
     @Override
     public int priority() {
       return 10; // low priority: released after higher-priority task resources
+    }
+
+    @Override
+    public String resourceName() {
+      return name;
+    }
+  }
+
+  private static class UntrackedArrowBufferAllocatorManager implements TaskResource {
+    private static final Logger LOGGER =
+        LoggerFactory.getLogger(UntrackedArrowBufferAllocatorManager.class);
+    private final String name;
+    private final BufferAllocator managed;
+
+    private UntrackedArrowBufferAllocatorManager(String name, BufferAllocator parent) {
+      this.name = "Untracked:" + name;
+      // Only the allocator that creates a buffer reports it to its listener, so the parent's
+      // listener doesn't reserve Spark memory for the buffers of this child.
+      this.managed =
+          parent.newChildAllocator(this.name, AllocationListener.NOOP, 0, Long.MAX_VALUE);
+    }
+
+    @Override
+    public void release() throws Exception {
+      final long leakBytes = managed.getAllocatedMemory();
+      if (leakBytes != 0L) {
+        // Leave it open: the parent allocator then reports the leak too.
+        LOGGER.warn(
+            String.format("Detected leaked Arrow allocator [%s], size: %d", name, leakBytes));
+        return;
+      }
+      managed.close();
+    }
+
+    @Override
+    public int priority() {
+      return 11; // released before the parent allocator, which can only be closed after it
     }
 
     @Override

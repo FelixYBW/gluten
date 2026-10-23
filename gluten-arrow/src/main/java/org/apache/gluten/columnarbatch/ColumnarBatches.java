@@ -240,8 +240,12 @@ public final class ColumnarBatches {
       Data.exportSchema(
           allocator, ArrowUtil.toArrowSchema(cSchema, allocator, provider), provider, arrowSchema);
 
+      // The exported buffers stay owned by the native batch, whose memory is already reserved (by
+      // the native memory pool, or by the Java allocator the batch was offloaded from), so import
+      // them into an allocator that doesn't reserve them again.
       ColumnarBatch output =
-          ArrowAbiUtil.importToSparkColumnarBatch(allocator, arrowSchema, cArray);
+          ArrowAbiUtil.importToSparkColumnarBatch(
+              ArrowBufferAllocators.contextUntrackedInstance(), arrowSchema, cArray);
 
       // Follow input's reference count. This might be optimized using
       // automatic clean-up or once the extensibility of ColumnarBatch is enriched.
