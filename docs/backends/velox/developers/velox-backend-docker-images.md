@@ -22,10 +22,10 @@ except where marked. On disk, a pulled image is roughly twice as large.
 |---|---|---|---|---|
 | [`vcpkg-almalinux-8-gcc13`](https://hub.docker.com/r/apache/gluten/tags?name=vcpkg-almalinux-8-gcc13) | [`Dockerfile.almalinux8-gcc13-static-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.almalinux8-gcc13-static-build) | amd64, arm64 | 1.7 GB | Static native builds in `velox_backend_x86`, `delta_spark_ut`, `velox_kafka`, `velox_native_build` (Iceberg), `velox_backend_ansi`, `velox_backend_enhanced`, `velox_nightly`, `velox_backend_cache`, `build_bundle_package` and `build_release`; [release builds](../../../developers/HowToRelease.md); [static build in Docker](velox-backend-build-in-docker.md) |
 | [`vcpkg-centos-9`](https://hub.docker.com/r/apache/gluten/tags?name=vcpkg-centos-9) | [`Dockerfile.centos9-static-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos9-static-build) | amd64, arm64 | 2.1 GB | Static native build in `velox_backend_arm`; `velox_backend_cache`; the static [dev container](../../../developers/dev-container.md) |
-| [`centos-8-jdk8`](https://hub.docker.com/r/apache/gluten/tags?name=centos-8-jdk8) | [`Dockerfile.centos8-dynamic-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos8-dynamic-build) | amd64, arm64 | 5.5 GB | Spark 3.4 / 3.5 unit tests and the Uniffle TPC job in `velox_backend_x86`; `velox_backend_enhanced`; `velox_nightly`; [dynamic build in Docker](velox-backend-build-in-docker.md) |
-| [`centos-8-jdk17`](https://hub.docker.com/r/apache/gluten/tags?name=centos-8-jdk17) | same, `JAVA_VERSION=17` | amd64, arm64 | 5.5 GB | Spark 4.0 unit tests and build checks in `velox_backend_x86`; `flink` |
+| [`centos-8-jdk8`](https://hub.docker.com/r/apache/gluten/tags?name=centos-8-jdk8) | [`Dockerfile.centos8-dynamic-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos8-dynamic-build) | amd64 | 5.5 GB | Spark 3.4 / 3.5 unit tests and the Uniffle TPC job in `velox_backend_x86`; `velox_backend_enhanced`; `velox_nightly`; [dynamic build in Docker](velox-backend-build-in-docker.md) |
+| [`centos-8-jdk17`](https://hub.docker.com/r/apache/gluten/tags?name=centos-8-jdk17) | same, `JAVA_VERSION=17` | amd64 | 5.5 GB | Spark 4.0 unit tests and build checks in `velox_backend_x86`; `flink` |
 | [`centos-9-jdk8`](https://hub.docker.com/r/apache/gluten/tags?name=centos-9-jdk8) | [`Dockerfile.centos9-dynamic-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos9-dynamic-build) | amd64, arm64 | 5.1 GB | `cpp-test-udf-test` (shared build, C++ tests, clang-tidy) in `velox_backend_x86` and `velox_backend_arm`; `velox_backend_cache`; the default [dev container](../../../developers/dev-container.md) |
-| [`centos-9-jdk17`](https://hub.docker.com/r/apache/gluten/tags?name=centos-9-jdk17) | same, `JAVA_VERSION=17` | amd64, arm64 | 5.1 GB | Spark 4.1 / 4.2 unit tests in `velox_backend_x86`; `delta_spark_ut`; `velox_backend_ansi`; the Iceberg test shards (`iceberg_upstream_revision`) |
+| [`centos-9-jdk17`](https://hub.docker.com/r/apache/gluten/tags?name=centos-9-jdk17) | same, `JAVA_VERSION=17` | amd64 | 5.1 GB | Spark 4.1 / 4.2 unit tests in `velox_backend_x86`; `delta_spark_ut`; `velox_backend_ansi`; the Iceberg test shards (`iceberg_upstream_revision`) |
 | [`centos-9-jdk17-cuda13.1-cudf`](https://hub.docker.com/r/apache/gluten/tags?name=centos-9-jdk17-cuda13.1-cudf) | [`cudf/Dockerfile.centos-9-jdk17-cuda13.1-cudf`](https://github.com/apache/gluten/blob/main/dev/docker/cudf/Dockerfile.centos-9-jdk17-cuda13.1-cudf) | amd64 | 13.2 GB | `build-cudf-centos-9` in `velox_backend_x86`; `velox_backend_cache`; [GPU support](../get-started/VeloxGPU.md) |
 | [`centos-8-runtime`](https://hub.docker.com/r/apache/gluten/tags?name=centos-8-runtime) | [`Dockerfile.centos8-runtime`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos8-runtime) | amd64 | 1.9 GB\* | `tpc-test-centos8` and the Celeborn TPC job in `velox_backend_x86` |
 | [`centos-9-runtime`](https://hub.docker.com/r/apache/gluten/tags?name=centos-9-runtime) | [`Dockerfile.centos9-runtime`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos9-runtime) | arm64 | 1.8 GB\* | `tpc-test-centos8` in `velox_backend_arm` |
@@ -144,6 +144,14 @@ Every run rebuilds all images from scratch against the current `main` of `apache
 `https://github.com/apache/gluten` and `main`. The GPU Dockerfile always clones `main`.
 Multi-arch tags are built on an x86 runner and an arm64 runner, pushed by digest, and combined into
 a single tag by the `merge*` jobs.
+
+An image is built for arm64 only if an arm64 CI job or the [dev containers](../../../developers/dev-container.md)
+use it:
+- `vcpkg-almalinux-8-gcc13`, `vcpkg-centos-9` and `centos-9-jdk8` are built for both amd64 and arm64;
+- `centos-9-runtime` is built for arm64 only;
+- all other images are built for amd64 only.
+
+To use an amd64-only image on an arm64 host, pass `--platform linux/amd64` (it runs emulated).
 
 Notes:
 - Only `apache/*` can publish. Publishing needs the `DOCKERHUB_USER` and `DOCKERHUB_TOKEN` secrets,
