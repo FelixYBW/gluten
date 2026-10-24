@@ -9,29 +9,9 @@ parent: Developer Overview
 GitHub Actions (GHA) workflows are defined under `.github/workflows/`.
 
 ## Docker Build
-A weekly job defined in `docker_image.yml` builds the Docker images used for CI verification. The Dockerfiles (under `dev/docker/`) and their corresponding images are listed below:
-
-file | images | comments
--- | -- | --
-Dockerfile.almalinux8-gcc13-static-build | apache/gluten:vcpkg-almalinux-8-gcc13 | almalinux 8, static link, jdk8
-Dockerfile.centos8-dynamic-build | apache/gluten:centos-8-jdk8 | centos 8, dynamic link, jdk8
-Dockerfile.centos8-dynamic-build | apache/gluten:centos-8-jdk17 | centos 8, dynamic link, jdk17
-Dockerfile.centos9-dynamic-build | apache/gluten:centos-9-jdk8 | centos 9, dynamic link, jdk8
-Dockerfile.centos9-dynamic-build | apache/gluten:centos-9-jdk17 | centos 9, dynamic link, jdk17
-Dockerfile.centos8-runtime | apache/gluten:centos-8-runtime | centos 8 + jdk 8/11/17 + CI tools only, for TPC runs of the static library
-Dockerfile.centos9-runtime | apache/gluten:centos-9-runtime | centos 9 (arm64) + jdk 8/11/17/21 + CI tools only, for TPC runs of the static library
-ubuntu/Dockerfile.ubuntu22-runtime | apache/gluten:ubuntu-22.04-runtime | ubuntu 22.04 + jdk 8/11/17/21/25 + CI tools only, for TPC runs of the static library
-cudf/Dockerfile.centos-9-jdk17-cuda13.1-cudf | apache/gluten:centos-9-jdk17-cuda13.1-cudf | centos 9, dynamic link, jdk17
-
-The Docker images can be found at [https://hub.docker.com/r/apache/gluten/tags](https://hub.docker.com/r/apache/gluten/tags).
-
-## CI Tools
-Tools that CI jobs need at runtime are installed into the images instead of being downloaded by each job, so PR jobs
-do not depend on package mirrors. `dev/docker/install-ci-tools.sh` installs `gh` and `jq` (used by the Apache Stash
-cache actions) into the build and runtime images. The `*-runtime` images contain only the OS, JDKs and these tools, so
-TPC jobs still check that the static native library runs on a plain OS. The centos dynamic images also ship JDK 17 next to their default JDK, and one PySpark
-virtualenv per version used by the Spark unit tests under `/opt/pyspark/<version>`. A job selects one by putting
-`/opt/pyspark/<version>/bin` first in `PATH`.
+`docker_image.yml` builds the Docker images that CI jobs run in, from the Dockerfiles under `dev/docker/`, weekly and on
+every change to them on `main`. See [Pre-built Docker Images](velox-backend-docker-images.md) for every published tag,
+its Dockerfile, architectures, size, contents, the jobs that use it, and how the images are published.
 
 ## Vcpkg Caching
 The Gluten main branch is pulled during the static build in Docker, and vcpkg caches binary data for all dependencies defined under `dev/vcpkg`.
