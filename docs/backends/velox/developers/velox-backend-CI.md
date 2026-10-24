@@ -14,9 +14,7 @@ A weekly job defined in `docker_image.yml` builds the Docker images used for CI 
 file | images | comments
 -- | -- | --
 Dockerfile.almalinux8-gcc13-static-build | apache/gluten:vcpkg-almalinux-8-gcc13 | almalinux 8, static link, jdk8
-Dockerfile.centos8-gcc13-static-build | apache/gluten:vcpkg-centos-8-gcc13 | centos 8, static link, jdk8
 Dockerfile.centos8-dynamic-build | apache/gluten:centos-8-jdk8 | centos 8, dynamic link, jdk8
-Dockerfile.centos8-dynamic-build | apache/gluten:centos-8-jdk11 | centos 8, dynamic link, jdk11
 Dockerfile.centos8-dynamic-build | apache/gluten:centos-8-jdk17 | centos 8, dynamic link, jdk17
 Dockerfile.centos9-dynamic-build | apache/gluten:centos-9-jdk8 | centos 9, dynamic link, jdk8
 Dockerfile.centos9-dynamic-build | apache/gluten:centos-9-jdk17 | centos 9, dynamic link, jdk17
