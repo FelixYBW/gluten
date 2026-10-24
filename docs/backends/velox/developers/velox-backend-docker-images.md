@@ -122,6 +122,15 @@ one with `JAVA_HOME`.
 All three have `gh`, `jq`, wget, procps and tzdata. `install-spark-deps.sh` uses the Hadoop and
 MinIO already in the image instead of downloading them.
 
+The runtime images contain no Velox, Gluten, Arrow or vcpkg, and jobs running in them compile no
+C++. In a pull request, Velox and Gluten C++ are compiled once, by `build-native-lib-centos-8` in
+`vcpkg-almalinux-8-gcc13`, which uploads `libvelox.so` and `libgluten.so` as an artifact. Each TPC
+job then:
+1. downloads that artifact into `cpp/build/releases/`;
+2. builds the Gluten jar and `tools/gluten-it` with Maven, compiling Java and Scala only;
+3. runs TPC-H and TPC-DS at scale factor 1 and compares the results with vanilla Spark
+   (`gluten-it queries-compare`).
+
 ## How the images are published
 
 `docker_image.yml` runs:
