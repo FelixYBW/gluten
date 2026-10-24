@@ -83,22 +83,14 @@ jobs:
           push: true
           tags: ${{ env.DOCKERHUB_REPO }}:centos-8-runtime
 
+  # arm64 only: the image is used by the ARM TPC job, and nothing runs it on x86.
   build-centos-9-runtime:
     if: ${{ startsWith(github.repository, 'apache/') }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-22.04, ubuntu-22.04-arm ]
+    runs-on: ubuntu-22.04-arm
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
-        with:
-          images: ${{ env.DOCKERHUB_REPO }}
-          tags: centos-9-runtime
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
@@ -109,28 +101,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push by digest
-        id: build
+      - name: Build and push Docker image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           file: dev/docker/Dockerfile.centos9-runtime
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,"name=${{ env.DOCKERHUB_REPO }}",push-by-digest=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p ${{ runner.temp }}/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v7
-        with:
-          name: digests-centos-9-runtime-${{ matrix.os }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
+          push: true
+          tags: ${{ env.DOCKERHUB_REPO }}:centos-9-runtime
 
   build-centos-9-jdk17-cuda13_1-cudf:
     if: ${{ startsWith(github.repository, 'apache/') }}
@@ -437,11 +414,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        digests: [ centos-8-jdk8, centos-8-jdk17, centos-9-jdk8, centos-9-jdk17, centos-9-runtime ]
+        digests: [ centos-8-jdk8, centos-8-jdk17, centos-9-jdk8, centos-9-jdk17 ]
     needs:
       - build-centos-8
       - build-centos-9
-      - build-centos-9-runtime
     steps:
       - name: Download digests
         uses: actions/download-artifact@v8

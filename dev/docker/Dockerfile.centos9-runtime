@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Runtime image for the CentOS Stream 9 TPC jobs (x86 and arm64), which check that the static
+# Runtime image for the CentOS Stream 9 TPC job on arm64, which checks that the static
 # native library runs on a plain CentOS 9. It adds only JDKs and CI tools to the OS image, no
 # native libraries. All JDKs are installed side by side under /usr/lib/jvm/java-<version>-openjdk;
 # jobs select one through JAVA_HOME instead of installing it at runtime.
