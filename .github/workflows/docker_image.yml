@@ -33,31 +33,6 @@ env:
   DOCKERHUB_REPO: apache/gluten
 
 jobs:
-  build-ubuntu22-m2-cache:
-    if: ${{ startsWith(github.repository, 'apache/') }}
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        with:
-          context: .
-          file: dev/docker/ubuntu/Dockerfile.ubuntu22-m2-cache
-          push: true
-          tags: ${{ env.DOCKERHUB_REPO }}:ubuntu22-m2-cache
-
   build-ubuntu22-runtime:
     if: ${{ startsWith(github.repository, 'apache/') }}
     runs-on: ubuntu-22.04
@@ -156,37 +131,6 @@ jobs:
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
-
-  build-centos-9-jdk17-cuda12_9-cudf:
-    if: ${{ startsWith(github.repository, 'apache/') }}
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: "node-cleanup" # by default the free runner does not have enough disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          sudo docker image prune --all --force
-          sudo docker builder prune -a -f
-      - run: df -h | sort -k 5 -nr # check disk space for debug
-      - name: Checkout repository
-        uses: actions/checkout@v7
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        with:
-          context: .
-          build-args: JAVA_VERSION=17
-          file: dev/docker/cudf/Dockerfile.centos-9-jdk17-cuda12.9-cudf
-          push: true
-          tags: ${{ env.DOCKERHUB_REPO }}:centos-9-jdk17-cuda12.9-cudf
 
   build-centos-9-jdk17-cuda13_1-cudf:
     if: ${{ startsWith(github.repository, 'apache/') }}
@@ -388,7 +332,7 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-22.04, ubuntu-22.04-arm ]
-        jdk: [jdk8, jdk11, jdk17]
+        jdk: [jdk8, jdk17]
     env:
       JDK_VERSION: 1.8.0
     steps:
@@ -585,7 +529,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        digests: [ centos-8-jdk8, centos-8-jdk11, centos-8-jdk17, centos-9-jdk8, centos-9-jdk11, centos-9-jdk17, centos-9-runtime ]
+        digests: [ centos-8-jdk8, centos-8-jdk11, centos-8-jdk17, centos-9-jdk8, centos-9-jdk17, centos-9-runtime ]
     needs:
       - build-centos-8
       - build-centos-9
