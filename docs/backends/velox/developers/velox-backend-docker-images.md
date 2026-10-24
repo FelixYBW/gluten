@@ -21,10 +21,8 @@ except where marked. On disk, a pulled image is roughly twice as large.
 | Tag | Dockerfile | Arch | Size | Used by |
 |---|---|---|---|---|
 | [`vcpkg-almalinux-8-gcc13`](https://hub.docker.com/r/apache/gluten/tags?name=vcpkg-almalinux-8-gcc13) | [`Dockerfile.almalinux8-gcc13-static-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.almalinux8-gcc13-static-build) | amd64, arm64 | 1.7 GB | Static native builds in `velox_backend_x86`, `delta_spark_ut`, `velox_kafka`, `velox_native_build` (Iceberg), `velox_backend_ansi`, `velox_backend_enhanced`, `velox_nightly`, `velox_backend_cache`, `build_bundle_package` and `build_release`; [release builds](../../../developers/HowToRelease.md); [static build in Docker](velox-backend-build-in-docker.md) |
-| [`vcpkg-centos-8-gcc13`](https://hub.docker.com/r/apache/gluten/tags?name=vcpkg-centos-8-gcc13) | [`Dockerfile.centos8-gcc13-static-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos8-gcc13-static-build) | amd64, arm64 | 2.7 GB | Not used by any workflow |
 | [`vcpkg-centos-9`](https://hub.docker.com/r/apache/gluten/tags?name=vcpkg-centos-9) | [`Dockerfile.centos9-static-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos9-static-build) | amd64, arm64 | 2.1 GB | Static native build in `velox_backend_arm`; `velox_backend_cache`; the static [dev container](../../../developers/dev-container.md) |
 | [`centos-8-jdk8`](https://hub.docker.com/r/apache/gluten/tags?name=centos-8-jdk8) | [`Dockerfile.centos8-dynamic-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos8-dynamic-build) | amd64, arm64 | 5.5 GB | Spark 3.4 / 3.5 unit tests and the Uniffle TPC job in `velox_backend_x86`; `velox_backend_enhanced`; `velox_nightly`; [dynamic build in Docker](velox-backend-build-in-docker.md) |
-| [`centos-8-jdk11`](https://hub.docker.com/r/apache/gluten/tags?name=centos-8-jdk11) | same, `JAVA_VERSION=11` | amd64, arm64 | 5.5 GB | Not used by any workflow |
 | [`centos-8-jdk17`](https://hub.docker.com/r/apache/gluten/tags?name=centos-8-jdk17) | same, `JAVA_VERSION=17` | amd64, arm64 | 5.5 GB | Spark 4.0 unit tests and build checks in `velox_backend_x86`; `velox_backend_enhanced`; `flink` |
 | [`centos-9-jdk8`](https://hub.docker.com/r/apache/gluten/tags?name=centos-9-jdk8) | [`Dockerfile.centos9-dynamic-build`](https://github.com/apache/gluten/blob/main/dev/docker/Dockerfile.centos9-dynamic-build) | amd64, arm64 | 5.1 GB | `cpp-test-udf-test` (shared build, C++ tests, clang-tidy) in `velox_backend_x86` and `velox_backend_arm`; `velox_backend_cache`; the default [dev container](../../../developers/dev-container.md) |
 | [`centos-9-jdk17`](https://hub.docker.com/r/apache/gluten/tags?name=centos-9-jdk17) | same, `JAVA_VERSION=17` | amd64, arm64 | 5.1 GB | Spark 4.1 / 4.2 unit tests in `velox_backend_x86`; `delta_spark_ut`; `velox_backend_ansi`; the Iceberg test shards (`iceberg_upstream_revision`) |
@@ -52,7 +50,7 @@ ccache. None of them contains Gluten source or binaries.
 
 The tools that CI jobs need at runtime are installed in the images, so jobs don't have to install
 packages or reach a package mirror. `dev/docker/install-ci-tools.sh` adds `gh` and `jq` (used by the
-Apache Stash cache actions) to every image except `vcpkg-centos-8-gcc13` and the GPU images.
+Apache Stash cache actions) to every image except the GPU image.
 
 ### Static build images (`vcpkg-*`)
 
@@ -63,10 +61,9 @@ vcpkg, so the libraries run on most Linux distributions (see
 | Tag | Base | Compiler | `JAVA_HOME` |
 |---|---|---|---|
 | `vcpkg-almalinux-8-gcc13` | `almalinux:8` (glibc 2.28) | gcc-toolset-13 | JDK 8 |
-| `vcpkg-centos-8-gcc13` | `inteldpo/gluten-ci-images:centos-8_gcc13` | GCC 13 | JDK 8 |
 | `vcpkg-centos-9` | `quay.io/centos/centos:stream9` | gcc-toolset-12 and 13 | JDK 17 |
 
-All three contain:
+Both contain:
 - A vcpkg binary cache in `/var/cache/vcpkg`, with the binary packages for every port in
   `dev/vcpkg`. `dev/vcpkg/populate-static-image-cache.sh` builds them with S3, GCS, HDFS, ABFS and
   tests enabled. `VCPKG_BINARY_SOURCES` points at the cache, so `--enable_vcpkg=ON` builds restore
@@ -81,7 +78,7 @@ These images build against shared system libraries. The Spark unit tests run in 
 
 | Tag | Base | Compiler | `JAVA_HOME` |
 |---|---|---|---|
-| `centos-8-jdk8` / `-jdk11` / `-jdk17` | `centos:8` (EOL, repos point at `vault.centos.org`) | gcc-toolset-12 | JDK 8 / 11 / 17 |
+| `centos-8-jdk8` / `-jdk17` | `centos:8` (EOL, repos point at `vault.centos.org`) | gcc-toolset-12 | JDK 8 / 17 |
 | `centos-9-jdk8` / `-jdk17` | `quay.io/centos/centos:stream9` | gcc-toolset-12 and 13 | JDK 8 / 17 |
 
 They contain:
@@ -150,11 +147,15 @@ Notes:
   reproduce an older environment, pull by digest (`apache/gluten@sha256:...`). The Iceberg harness
   pins its images this way (`pin_image` in `.github/workflows/util/iceberg-upstream/baseline.py`).
 - Older tags are no longer rebuilt. Docker Hub still has release tags (`1.3-*`, `1.4-*`, `1.5-*`),
-  `vcpkg-centos-7*`, `vcpkg-centos-8`, `centos-8`, `centos-8-dev`, `centos-9-jdk8-cudf`,
-  `centos-9-jdk11`, `centos-9-jdk17-cuda12.9-cudf`, `ubuntu22-m2-cache` and
-  `gluten-vcpkg-builder_*`, but none of them is updated any more. Some release branches still use
-  them: `vcpkg-centos-7` (`branch-1.2` to `branch-1.6`), `vcpkg-centos-7-gcc13` (`branch-1.7`),
-  `vcpkg-centos-8` and `centos-9-jdk8-cudf`.
+  `vcpkg-centos-7*`, `vcpkg-centos-8`, `vcpkg-centos-8-gcc13`, `centos-8`, `centos-8-dev`,
+  `centos-8-jdk11`, `centos-9-jdk8-cudf`, `centos-9-jdk11`, `centos-9-jdk17-cuda12.9-cudf`,
+  `ubuntu22-m2-cache` and `gluten-vcpkg-builder_*`, but none of them is updated any more.
+  `docker_image.yml` only publishes images that a workflow on `main` uses. Tags that only release
+  branches use stay on Docker Hub as they were last built:
+  - `vcpkg-centos-7`: `branch-1.2` to `branch-1.6`
+  - `vcpkg-centos-7-gcc13` and `vcpkg-centos-8-gcc13`: `branch-1.7`
+  - `vcpkg-centos-8`: `branch-1.5` and `branch-1.6`
+  - `centos-8-jdk11` and `centos-9-jdk8-cudf`: `branch-1.5` to `branch-1.7`
 
 ## Building an image locally
 
