@@ -112,6 +112,10 @@ jobs:
       shims41:  ${{ steps.filter.outputs.shims41 }}
       shims42:  ${{ steps.filter.outputs.shims42 }}
       tools_it: ${{ steps.filter.outputs.tools_it }}
+      spark35_needed: >-
+        ${{ steps.filter.outputs.java == 'true' ||
+            steps.filter.outputs.shims35 == 'true' ||
+            steps.filter.outputs.cpp == 'true' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -870,10 +874,7 @@ jobs:
 
   spark-test-spark35:
     needs: [detect-changes, build-native-lib-centos-8]
-    if: >-
-      needs.detect-changes.outputs.java == 'true' ||
-      needs.detect-changes.outputs.shims35 == 'true' ||
-      needs.detect-changes.outputs.cpp == 'true'
+    if: needs.detect-changes.outputs.spark35_needed == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -1009,10 +1010,7 @@ jobs:
 
   spark-test-spark35-slow:
     needs: [detect-changes, build-native-lib-centos-8]
-    if: >-
-      needs.detect-changes.outputs.java == 'true' ||
-      needs.detect-changes.outputs.shims35 == 'true' ||
-      needs.detect-changes.outputs.cpp == 'true'
+    if: needs.detect-changes.outputs.spark35_needed == 'true'
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -1662,10 +1660,7 @@ jobs:
   # revision; see docs/backends/velox/developers/velox-backend-CI.md.
   iceberg-spark-ut:
     needs: [detect-changes, build-native-lib-centos-8]
-    if: >-
-      needs.detect-changes.outputs.java == 'true' ||
-      needs.detect-changes.outputs.shims35 == 'true' ||
-      needs.detect-changes.outputs.cpp == 'true'
+    if: needs.detect-changes.outputs.spark35_needed == 'true'
     permissions:
       contents: read
       actions: read
@@ -1677,10 +1672,7 @@ jobs:
   # The Kafka native tests run in cpp-test-udf-test, whose build enables Kafka.
   spark-test-kafka-spark35:
     needs: [detect-changes, build-native-lib-centos-8]
-    if: >-
-      needs.detect-changes.outputs.java == 'true' ||
-      needs.detect-changes.outputs.shims35 == 'true' ||
-      needs.detect-changes.outputs.cpp == 'true'
+    if: needs.detect-changes.outputs.spark35_needed == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
