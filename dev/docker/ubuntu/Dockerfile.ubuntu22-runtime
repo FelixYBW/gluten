@@ -34,6 +34,8 @@ RUN --mount=type=bind,source=dev/docker/install-ci-tools.sh,target=/tmp/install-
     python3 -m pip install --no-cache-dir requests; \
     bash /tmp/install-ci-tools.sh; \
     # Hadoop (/opt/hadoop-<version>) and MinIO for the HDFS and S3 TPC runs.
-    cd /opt && bash -c 'source /tmp/install-spark-deps.sh && download_hadoop 3.3.6 && install_minio'; \
+    cd /opt; bash -ec 'source /tmp/install-spark-deps.sh; \
+    download_hadoop 3.3.6; \ 
+    install_minio'; \
     ls /usr/lib/jvm /opt; \
     rm -rf /var/lib/apt/lists/*
