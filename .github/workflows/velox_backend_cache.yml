@@ -71,7 +71,9 @@ jobs:
     container: apache/gluten:vcpkg-centos-9
     strategy:
       matrix:
-        os: [ ubuntu-22.04, ubuntu-24.04-arm ]
+        # arm64 only: the static CentOS 9 build runs only in velox_backend_arm.yml, which
+        # restores this cache on arm64. The x86 static build uses the almalinux8 cache instead.
+        os: [ ubuntu-24.04-arm ]
     steps:
       - uses: actions/checkout@v7
       - name: Get Ccache
