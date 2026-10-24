@@ -23,11 +23,11 @@ FROM quay.io/centos/centos:stream9
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-COPY dev/docker/install-ci-tools.sh /opt/ci/install-ci-tools.sh
-RUN set -ex; \
+RUN --mount=type=bind,source=dev/docker/install-ci-tools.sh,target=/tmp/install-ci-tools.sh \
+    set -ex; \
     dnf update -y; \
     dnf install -y java-1.8.0-openjdk-devel java-11-openjdk-devel java-17-openjdk-devel \
         java-21-openjdk-devel wget tar gzip git procps-ng which findutils tzdata python3; \
-    bash /opt/ci/install-ci-tools.sh; \
+    bash /tmp/install-ci-tools.sh; \
     dnf clean all; \
     rm -rf /var/cache/dnf

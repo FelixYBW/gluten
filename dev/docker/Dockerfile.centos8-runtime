@@ -23,14 +23,14 @@ FROM centos:8
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-COPY dev/docker/install-ci-tools.sh /opt/ci/install-ci-tools.sh
-RUN set -ex; \
+RUN --mount=type=bind,source=dev/docker/install-ci-tools.sh,target=/tmp/install-ci-tools.sh \
+    set -ex; \
     sed -i -e "s|mirrorlist=|#mirrorlist=|g" /etc/yum.repos.d/CentOS-* || true; \
     sed -i -e "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-* || true; \
     yum update -y; \
     yum install -y java-1.8.0-openjdk-devel java-11-openjdk-devel java-17-openjdk-devel \
         wget curl tar gzip git procps-ng which findutils tzdata python3; \
-    bash /opt/ci/install-ci-tools.sh; \
+    bash /tmp/install-ci-tools.sh; \
     # Celeborn releases for the Celeborn TPC job; downloading them at runtime is throttled.
     mirror_host="https://www.apache.org/dyn/closer.lua"; \
     wget -nv ${mirror_host}/celeborn/celeborn-0.5.4/apache-celeborn-0.5.4-bin.tgz?action=download -O /opt/apache-celeborn-0.5.4-bin.tgz; \
