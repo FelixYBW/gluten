@@ -30,11 +30,6 @@ on:
       test_image:
         required: true
         type: string
-      native_artifact:
-        # Native libraries already built for this revision in the calling run. When empty,
-        # they are built here.
-        type: string
-        default: ''
 
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
@@ -46,7 +41,6 @@ env:
 
 jobs:
   native:
-    if: inputs.native_artifact == ''
     uses: ./.github/workflows/velox_native_build.yml
     with:
       revision: ${{ inputs.revision }}
@@ -55,7 +49,6 @@ jobs:
 
   build:
     needs: native
-    if: ${{ !cancelled() && (needs.native.result == 'success' || needs.native.result == 'skipped') }}
     runs-on: ubuntu-22.04
     container: ${{ inputs.test_image }}
     env:
@@ -80,7 +73,7 @@ jobs:
       - name: Download native libraries
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.native_artifact || format('iceberg-native-{0}', inputs.label) }}
+          name: iceberg-native-${{ inputs.label }}
           path: cpp/build/releases/
       - name: Build Gluten once for all shards
         shell: bash

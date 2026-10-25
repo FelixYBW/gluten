@@ -15,8 +15,8 @@
 
 name: Velox Backend (Enhanced)
 
-# Paused on pull requests to save CI capacity: the enhanced-features build is a separate
-# static Velox build that no other job reuses. Run it on demand when needed.
+# No pending patches remain in the enhanced branch. Pause automatic PR runs to save CI
+# capacity, and keep manual runs available for urgent patches when needed.
 on:
   workflow_dispatch:
 
