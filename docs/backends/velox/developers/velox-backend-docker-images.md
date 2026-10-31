@@ -205,8 +205,15 @@ image's size and actual saving before switching CI consumers.
 
 Published tags are:
 
-- `velox-static-<key>`: the exact build identity; an existing key is reused;
+- `velox-static-slot-0` to `velox-static-slot-7`: the eight most recently published keys;
 - `velox-static-latest` and `velox-static-almalinux-8-gcc13`: moving aliases.
+
+CI can't delete Docker Hub tags, so a new key overwrites the least recently published slot instead
+of adding a tag. Each image records its key in the `org.apache.gluten.velox-key` label and its
+publish order in `org.apache.gluten.velox-sequence`. An existing key is reused without rebuilding.
+`dev/ci-velox-key.py slot --expected-key=<key>` reports the slot holding a key, inspecting only
+the image manifests. If no slot holds it, use `velox-static-latest`: the build script checks out the
+requested Velox commit and rebuilds only what changed.
 
 Native-input pushes to `main` run `velox_image.yml` directly. `docker_image.yml` also calls it
 after the AlmaLinux base image is published, including weekly refreshes. This keeps native-only

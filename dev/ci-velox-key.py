@@ -43,6 +43,11 @@ INPUTS = (
     "dev/docker/Dockerfile.velox-static-almalinux8-gcc13",
 )
 BUILD_ENV = {"CPU_TARGET": "avx", "NUM_THREADS": "2", "VELOX_BUILD_SHARED": "OFF"}
+# CI can't delete Docker Hub tags, so images rotate through a fixed set of slots.
+IMAGE_REPOSITORY = "apache/gluten"
+SLOT_COUNT = 8
+KEY_LABEL = "org.apache.gluten.velox-key"
+SEQUENCE_LABEL = "org.apache.gluten.velox-sequence"
 
 
 def git(root, *args):
@@ -196,6 +201,54 @@ def build(root, info, expected_key):
     (velox / ".velox-build.json").write_text(json.dumps(info, indent=2) + "\n")
 
 
+def slot_image(slot):
+    return f"{IMAGE_REPOSITORY}:velox-static-slot-{slot}"
+
+
+def published_labels(slot):
+    """Return the labels of a published slot, or None if the slot is empty."""
+    result = subprocess.run(
+        [
+            "docker",
+            "buildx",
+            "imagetools",
+            "inspect",
+            slot_image(slot),
+            "--format",
+            "{{json .Image}}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        if "not found" in result.stderr.lower():
+            return None
+        raise ValueError(f"Cannot inspect {slot_image(slot)}: {result.stderr.strip()}")
+    image = json.loads(result.stdout) or {}
+    # A manifest list is reported per platform; this image variant is amd64 only.
+    if "config" not in image:
+        image = image.get("linux/amd64") or {}
+    return (image.get("config") or {}).get("Labels") or {}
+
+
+def sequence(labels):
+    try:
+        return int((labels or {}).get(SEQUENCE_LABEL, -1))
+    except ValueError:
+        return -1
+
+
+def choose_slot(key, published):
+    """Find the slot holding key, or else the empty or least recently published one."""
+    for slot, labels in enumerate(published):
+        if labels and labels.get(KEY_LABEL) == key:
+            return {"found": True, "slot": slot, "sequence": sequence(labels)}
+    sequences = [sequence(labels) for labels in published]
+    slot = min(range(len(published)), key=lambda index: sequences[index])
+    return {"found": False, "slot": slot, "sequence": max(sequences) + 1}
+
+
 def smoke(root):
     info = json.loads(Path("/opt/velox/.velox-build.json").read_text())
     if metadata(root, info["base_image"], info["velox_commit"])["key"] != info["key"]:
@@ -219,7 +272,7 @@ def smoke(root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("key", "build", "smoke"))
+    parser.add_argument("mode", choices=("key", "build", "smoke", "slot"))
     parser.add_argument(
         "--repository-root", type=Path, default=Path(__file__).resolve().parents[1]
     )
@@ -231,6 +284,16 @@ def main():
     root = args.repository_root.resolve()
     if args.mode == "smoke":
         smoke(root)
+        return
+    if args.mode == "slot":
+        if not re.fullmatch(r"[0-9a-f]{64}", args.expected_key or ""):
+            raise ValueError("Pass the Velox key as --expected-key")
+        published = [published_labels(slot) for slot in range(SLOT_COUNT)]
+        result = choose_slot(args.expected_key, published)
+        result["image"] = slot_image(result["slot"])
+        for name, value in result.items():
+            value = str(value).lower() if isinstance(value, bool) else value
+            print(f"{name}={value}" if args.github_output else f"{name}: {value}")
         return
     info = metadata(root, args.base_image or "", args.velox_commit)
     if args.mode == "build":

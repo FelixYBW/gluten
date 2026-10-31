@@ -231,6 +231,53 @@ class VeloxKeyTest(unittest.TestCase):
             {name: info[name] for name in ("key", "base_image", "velox_commit")},
         )
 
+    def labels(self, velox_key, sequence):
+        return {key.KEY_LABEL: velox_key, key.SEQUENCE_LABEL: str(sequence)}
+
+    def test_a_published_key_reuses_its_slot(self):
+        published = [self.labels("a", 3), self.labels("b", 4), None]
+        self.assertEqual(
+            key.choose_slot("b", published), {"found": True, "slot": 1, "sequence": 4}
+        )
+
+    def test_a_new_key_fills_an_empty_slot_first(self):
+        published = [self.labels("a", 0), None, self.labels("b", 1)]
+        self.assertEqual(
+            key.choose_slot("c", published), {"found": False, "slot": 1, "sequence": 2}
+        )
+
+    def test_a_new_key_replaces_the_least_recently_published_slot(self):
+        published = [self.labels("a", 9), self.labels("b", 7), self.labels("c", 8)]
+        self.assertEqual(
+            key.choose_slot("d", published), {"found": False, "slot": 1, "sequence": 10}
+        )
+
+    def test_unlabelled_slots_are_replaced_first(self):
+        published = [self.labels("a", 2), {}, {key.SEQUENCE_LABEL: "bad"}]
+        self.assertEqual(key.choose_slot("d", published)["slot"], 1)
+
+    def inspect(self, returncode=0, stdout="", stderr=""):
+        return patch.object(
+            subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], returncode, stdout, stderr),
+        )
+
+    def test_published_labels_read_single_and_multi_platform_images(self):
+        labels = self.labels("a", 1)
+        single = json.dumps({"config": {"Labels": labels}})
+        multi = json.dumps({"linux/amd64": {"config": {"Labels": labels}}})
+        for output in (single, multi):
+            with self.subTest(output=output), self.inspect(stdout=output):
+                self.assertEqual(key.published_labels(0), labels)
+
+    def test_missing_slots_are_empty_and_other_inspect_errors_fail(self):
+        with self.inspect(1, stderr="ERROR: docker.io/apache/gluten:x: not found"):
+            self.assertIsNone(key.published_labels(0))
+        with self.inspect(1, stderr="ERROR: unauthorized"):
+            with self.assertRaisesRegex(ValueError, "unauthorized"):
+                key.published_labels(0)
+
     def test_a_mismatched_build_key_is_refused_before_running_any_build(self):
         info = self.info()
         with patch.object(subprocess, "run") as run:

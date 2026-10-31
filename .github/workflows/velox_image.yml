@@ -90,19 +90,18 @@ jobs:
           docker pull --platform linux/amd64 "$base"
           digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$base")
           python3 dev/ci-velox-key.py key --base-image="$digest" --github-output >> "$GITHUB_OUTPUT"
-      - name: Check whether this exact image is already published
-        id: existing
+      - name: Find the slot holding this key, or the least recently published one
+        id: slot
         env:
-          IMAGE: apache/gluten:velox-static-${{ steps.key.outputs.key }}
+          VELOX_KEY: ${{ steps.key.outputs.key }}
         run: |
-          if docker manifest inspect "$IMAGE" > /dev/null; then
-            echo 'found=true' >> "$GITHUB_OUTPUT"
-            echo "Already published: $IMAGE" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo 'found=false' >> "$GITHUB_OUTPUT"
+          slot=$(python3 dev/ci-velox-key.py slot --expected-key="$VELOX_KEY" --github-output)
+          echo "$slot" | tee -a "$GITHUB_OUTPUT"
+          if grep -qx 'found=true' <<< "$slot"; then
+            echo "Already published in $(sed -n 's/^image=//p' <<< "$slot")" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Build the native image locally before publishing
-        if: steps.existing.outputs.found != 'true'
+        if: steps.slot.outputs.found != 'true'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
@@ -110,15 +109,18 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: apache/gluten:velox-static-${{ steps.key.outputs.key }}
+          tags: ${{ steps.slot.outputs.image }}
+          labels: |
+            org.apache.gluten.velox-key=${{ steps.key.outputs.key }}
+            org.apache.gluten.velox-sequence=${{ steps.slot.outputs.sequence }}
           build-args: |
             BASE_IMAGE=${{ steps.key.outputs.base_image }}
             VELOX_COMMIT=${{ steps.key.outputs.velox_commit }}
             VELOX_KEY=${{ steps.key.outputs.key }}
       - name: Measure size and verify the Gluten-only fast path
-        if: steps.existing.outputs.found != 'true'
+        if: steps.slot.outputs.found != 'true'
         env:
-          IMAGE: apache/gluten:velox-static-${{ steps.key.outputs.key }}
+          IMAGE: ${{ steps.slot.outputs.image }}
         run: |
           bytes=$(docker image inspect --format '{{.Size}}' "$IMAGE")
           echo "Image size (uncompressed): $bytes bytes" >> "$GITHUB_STEP_SUMMARY"
@@ -129,9 +131,9 @@ jobs:
           echo "Gluten-only smoke build (including vcpkg restore): $((SECONDS - start)) seconds" >> "$GITHUB_STEP_SUMMARY"
           df -h | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Publish the validated image
-        if: steps.existing.outputs.found != 'true'
+        if: steps.slot.outputs.found != 'true'
         env:
-          IMAGE: apache/gluten:velox-static-${{ steps.key.outputs.key }}
+          IMAGE: ${{ steps.slot.outputs.image }}
         run: |
           docker push "$IMAGE"
           for tag in velox-static-latest velox-static-almalinux-8-gcc13; do
