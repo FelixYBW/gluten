@@ -39,6 +39,7 @@ INPUTS = (
     CI_SCRIPT,
     "dev/ci-velox-key.py",
     "dev/docker/Dockerfile.almalinux8-gcc13-static-build",
+    "dev/docker/install-ci-tools.sh",
     "dev/docker/Dockerfile.velox-static-almalinux8-gcc13",
 )
 BUILD_ENV = {"CPU_TARGET": "avx", "NUM_THREADS": "2", "VELOX_BUILD_SHARED": "OFF"}

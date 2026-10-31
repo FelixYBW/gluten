@@ -36,6 +36,7 @@ on:
       - 'dev/builddeps-veloxbe.sh'
       - 'dev/build-helper-functions.sh'
       - 'dev/docker/Dockerfile*almalinux*'
+      - 'dev/docker/install-ci-tools.sh'
       - '.github/workflows/velox_image.yml'
       - '.github/workflows/docker_image.yml'
       - 'gluten-ut/src-velox-image/**'
